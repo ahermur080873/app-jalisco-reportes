@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://kit.fontawesome.com https://dujmncbgyamphqvuiroy.supabase.co https://*.supabase.co;">
+    <title>Dashboard - Reportes Ciudadanos Jalisco</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; }
+        
+        .header {
+            background: linear-gradient(135deg, #0b3d2e, #1b5e3f);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .header h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .btn-salir { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 15px; border-radius: 20px; cursor: pointer; }
+        .last-update { background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 20px; font-size: 12px; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        
+        .stat-card .value { font-size: 32px; font-weight: bold; color: #1b5e3f; }
+        .stat-card .label { color: #666; font-size: 14px; margin-top: 5px; }
+        
+        .filtros {
+            padding: 0 30px 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filtros select, .filtros input {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            background: white;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 0 30px 20px 30px;
+        }
+        
+        .map-container {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .map-container h3 { padding: 15px 20px; background: #1b5e3f; color: white; margin: 0; }
+        #map { height: 400px; width: 100%; }
+        
+        .chart-container {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .reports-table {
+            background: white;
+            border-radius: 16px;
+            margin: 0 30px 20px 30px;
+            overflow-x: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .reports-table h3 { padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; margin: 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        th { background: #f8f9fa; font-weight: 600; }
+        
+        .status-abierto { background: #ffedd5; color: #b91c1c; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
+        .status-en_proceso { background: #fff3e0; color: #c2410c; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
+        .status-resuelto { background: #e0f2e9; color: #0b5e2e; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
+        
+        .floating-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #1b5e3f;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            z-index: 1000;
+        }
+        .floating-btn:hover { background: #0b3d2e; transform: scale(1.05); }
+        
+        .footer { text-align: center; padding: 20px; color: #6c757d; font-size: 12px; }
+        
+        @media (max-width: 900px) {
+            .dashboard { grid-template-columns: 1fr; }
+        }
+        
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .error { text-align: center; padding: 40px; color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1><i class="fas fa-chart-line"></i> Reportes Ciudadanos Jalisco</h1>
+            <p>Sistema integrado de incidencias - Área Metropolitana de Guadalajara</p>
+        </div>
+        <div class="user-info">
+            <span id="userName"><i class="fas fa-user-circle"></i> Cargando...</span>
+            <button class="btn-salir" id="btnLogout"><i class="fas fa-sign-out-alt"></i> Salir</button>
+            <div class="last-update" id="lastUpdate">
+                <i class="fas fa-sync-alt"></i> Cargando...
+            </div>
+        </div>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card"><div class="value" id="totalReportes">--</div><div class="label">Total Reportes</div></div>
+        <div class="stat-card"><div class="value" id="abiertosCount">--</div><div class="label">Abiertos</div></div>
+        <div class="stat-card"><div class="value" id="resueltosCount">--</div><div class="label">Resueltos</div></div>
+        <div class="stat-card"><div class="value" id="zonasCount">--</div><div class="label">Zonas Afectadas</div></div>
+    </div>
+    
+    <div class="filtros">
+        <select id="filtroCategoria">
+            <option value="todas">Todas las categorías</option>
+        </select>
+        <select id="filtroEstado">
+            <option value="todos">Todos los estados</option>
+            <option value="abierto">Abiertos</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="resuelto">Resueltos</option>
+        </select>
+        <input type="date" id="filtroFecha">
+    </div>
+    
+    <div class="dashboard">
+        <div class="map-container">
+            <h3><i class="fas fa-map-marker-alt"></i> Mapa de Reportes</h3>
+            <div id="map"></div>
+        </div>
+        <div class="chart-container">
+            <h3><i class="fas fa-chart-line"></i> Evolución (últimos 7 días)</h3>
+            <canvas id="trendChart"></canvas>
+        </div>
+    </div>
+    
+    <div class="reports-table">
+        <h3><i class="fas fa-list"></i> Últimos Reportes</h3>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr><th>Fecha</th><th>Categoría</th><th>Ubicación</th><th>Descripción</th><th>Estado</th></tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="5" class="loading">Cargando datos desde Supabase...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <a href="reporte_nuevo.html" class="floating-btn"><i class="fas fa-plus"></i></a>
+    
+    <div class="footer">
+        <i class="fas fa-database"></i> Datos en tiempo real desde Supabase | Seguridad Ciudadana Jalisco
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        (function() {
+            const SUPABASE_URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
+            const SUPABASE_ANON_KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
+            
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            
+            let map;
+            let trendChart;
+            let currentData = [];
+            
+            function getMarkerColor(categoriaId) {
+                const colors = { 1: '#dc3545', 2: '#ffc107', 3: '#17a2b8', 4: '#28a745', 5: '#6f42c1', 6: '#fd7e14', 7: '#20c997' };
+                return colors[categoriaId] || '#6c757d';
+            }
+            
+            function initMap() {
+                map = L.map('map').setView([20.6761, -103.3476], 11);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO'
+                }).addTo(map);
+                console.log('Mapa inicializado');
+            }
+            
+            async function loadCategoriasFiltro() {
+                const { data } = await supabase.from('categorias_reporte').select('id_categoria, nombre');
+                const select = document.getElementById('filtroCategoria');
+                if (data) {
+                    data.forEach(cat => {
+                        select.innerHTML += `<option value="${cat.id_categoria}">${cat.nombre}</option>`;
+                    });
+                }
+            }
+            
+            async function loadData() {
+                try {
+                    let query = supabase
+                        .from('reportes_ciudadanos')
+                        .select('*, categorias_reporte!inner(id_categoria, nombre)')
+                        .order('fecha_creacion', { ascending: false });
+                    
+                    const categoria = document.getElementById('filtroCategoria').value;
+                    const estado = document.getElementById('filtroEstado').value;
+                    const fecha = document.getElementById('filtroFecha').value;
+                    
+                    if (categoria !== 'todas') query = query.eq('id_categoria', categoria);
+                    if (estado !== 'todos') query = query.eq('estado', estado);
+                    if (fecha) query = query.gte('fecha_creacion', fecha);
+                    
+                    const { data, error } = await query;
+                    if (error) throw error;
+                    
+                    currentData = data || [];
+                    
+                    console.log('Reportes obtenidos:', currentData.length);
+                    
+                    // Estadísticas
+                    const total = currentData.length;
+                    const abiertos = currentData.filter(r => r.estado === 'abierto').length;
+                    const resueltos = currentData.filter(r => r.estado === 'resuelto').length;
+                    const zonas = new Set(currentData.map(r => `${Math.round(r.latitud * 100)},${Math.round(r.longitud * 100)}`)).size;
+                    
+                    document.getElementById('totalReportes').innerText = total;
+                    document.getElementById('abiertosCount').innerText = abiertos;
+                    document.getElementById('resueltosCount').innerText = resueltos;
+                    document.getElementById('zonasCount').innerText = zonas || 0;
+                    
+                    // Mapa
+                    if (map) {
+                        map.eachLayer((layer) => {
+                            if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+                                map.removeLayer(layer);
+                            }
+                        });
+                    }
+                    
+                    let marcadoresAgregados = 0;
+                    currentData.forEach(r => {
+                        if (r.latitud && r.longitud) {
+                            L.circleMarker([r.latitud, r.longitud], {
+                                radius: 10,
+                                fillColor: getMarkerColor(r.id_categoria),
+                                color: '#fff',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            }).addTo(map).bindPopup(`
+                                <b>${r.categorias_reporte?.nombre || 'Reporte'}</b><br>
+                                ${r.descripcion?.substring(0, 100) || ''}<br>
+                                <b>Estado:</b> ${r.estado}<br>
+                                <b>Fecha:</b> ${new Date(r.fecha_creacion).toLocaleDateString()}
+                            `);
+                            marcadoresAgregados++;
+                        }
+                    });
+                    console.log('Marcadores agregados:', marcadoresAgregados);
+                    
+                    // Tabla
+                    const tbody = document.getElementById('tableBody');
+                    tbody.innerHTML = '';
+                    currentData.slice(0, 20).forEach(r => {
+                        const row = tbody.insertRow();
+                        row.innerHTML = `
+                            <td>${new Date(r.fecha_creacion).toLocaleDateString()}</td>
+                            <td>${r.categorias_reporte?.nombre || '-'}</td>
+                            <td>${r.latitud.toFixed(4)}, ${r.longitud.toFixed(4)}</td>
+                            <td>${r.descripcion?.substring(0, 60) || ''}${r.descripcion?.length > 60 ? '...' : ''}</td>
+                            <td><span class="status-${r.estado}">${r.estado === 'en_proceso' ? 'En Proceso' : (r.estado?.charAt(0).toUpperCase() + r.estado?.slice(1))}</span></td>
+                        `;
+                    });
+                    
+                    // Gráfico
+                    const last7Days = [];
+                    for (let i = 6; i >= 0; i--) {
+                        const date = new Date();
+                        date.setDate(date.getDate() - i);
+                        last7Days.push(date.toISOString().split('T')[0]);
+                    }
+                    
+                    const dailyCounts = last7Days.map(day => currentData.filter(r => r.fecha_creacion?.split('T')[0] === day).length);
+                    
+                    const ctx = document.getElementById('trendChart').getContext('2d');
+                    if (trendChart) trendChart.destroy();
+                    trendChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: last7Days.map(d => d.substring(5)),
+                            datasets: [{ label: 'Reportes por día', data: dailyCounts, borderColor: '#1b5e3f', tension: 0.3, fill: true }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true }
+                    });
+                    
+                    document.getElementById('lastUpdate').innerHTML = `<i class="fas fa-sync-alt"></i> Actualizado: ${new Date().toLocaleTimeString()}`;
+                    console.log('Dashboard actualizado correctamente');
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    document.getElementById('tableBody').innerHTML = `<tr><td colspan="5" class="error">❌ Error: ${error.message}</td></tr>`;
+                }
+            }
+            
+            // Event listeners
+            document.getElementById('filtroCategoria').addEventListener('change', loadData);
+            document.getElementById('filtroEstado').addEventListener('change', loadData);
+            document.getElementById('filtroFecha').addEventListener('change', loadData);
+            
+            document.getElementById('btnLogout').onclick = async () => {
+                await supabase.auth.signOut();
+                window.location.href = 'login.html';
+            };
+            
+            async function init() {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                
+                const { data: userData } = await supabase.from('usuarios').select('nombre_completo').eq('id_usuario', session.user.id).single();
+                if (userData) {
+                    document.getElementById('userName').innerHTML = `<i class="fas fa-user-circle"></i> ${userData.nombre_completo.split(' ')[0]}`;
+                }
+                
+                initMap();
+                await loadCategoriasFiltro();
+                await loadData();
+                setInterval(loadData, 60000);
+            }
+            
+            init();
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso - Reportes Ciudadanos Jalisco</title>
+    
+    <!-- Supabase JS - Versión específica para evitar problemas -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0b3d2e, #1b5e3f);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 450px;
+            overflow: hidden;
+        }
+        .header-icon {
+            text-align: center;
+            padding: 30px 0 0;
+            color: #1b5e3f;
+        }
+        .header-icon i { font-size: 56px; }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e9ecef;
+            margin-top: 20px;
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            color: #1b5e3f;
+            border-bottom: 3px solid #1b5e3f;
+        }
+        .form-container { padding: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 15px;
+        }
+        input:focus { outline: none; border-color: #1b5e3f; }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #1b5e3f;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #0b3d2e; }
+        .message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 14px;
+            display: none;
+        }
+        .message.error { background: #f8d7da; color: #721c24; display: block; }
+        .message.success { background: #d4edda; color: #155724; display: block; }
+        .info {
+            background: #e8f4f0;
+            color: #1b5e3f;
+            margin-bottom: 15px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-icon">
+            <i class="fas fa-hand-holding-heart"></i>
+        </div>
+        <div class="tabs">
+            <div class="tab active" data-tab="login">Iniciar Sesión</div>
+            <div class="tab" data-tab="register">Registrarse</div>
+        </div>
+        
+        <div class="form-container">
+            <div id="info" class="message info" style="display: none;"></div>
+            
+            <div id="loginForm">
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Correo electrónico</label>
+                    <input type="email" id="loginEmail" placeholder="tu@email.com" value="ahermur@icloud.com">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Contraseña</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••">
+                </div>
+                <button id="btnLogin">Ingresar</button>
+            </div>
+            
+            <div id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Nombre completo</label>
+                    <input type="text" id="regNombre" placeholder="Juan Pérez">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Correo electrónico</label>
+                    <input type="email" id="regEmail" placeholder="tu@email.com">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Contraseña</label>
+                    <input type="password" id="regPassword" placeholder="• • • • • • • •">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-check-circle"></i> Confirmar contraseña</label>
+                    <input type="password" id="regConfirmPassword" placeholder="• • • • • • • •">
+                </div>
+                <button id="btnRegister">Crear cuenta</button>
+            </div>
+            
+            <div id="message" class="message"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración de Supabase
+        const SUPABASE_URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
+        
+        console.log('Iniciando login.html...');
+        console.log('SUPABASE_URL:', SUPABASE_URL);
+        console.log('SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY.substring(0, 30) + '...');
+        
+        // Verificar que Supabase existe
+        if (typeof window.supabase === 'undefined') {
+            console.error('Supabase no se cargó correctamente');
+            document.getElementById('info').innerHTML = '❌ Error: Supabase no se cargó. Verifica tu conexión a internet.';
+            document.getElementById('info').style.display = 'block';
+        } else {
+            console.log('Supabase cargado correctamente');
+        }
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('Cliente Supabase creado');
+        
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const tabName = tab.dataset.tab;
+                document.getElementById('loginForm').style.display = tabName === 'login' ? 'block' : 'none';
+                document.getElementById('registerForm').style.display = tabName === 'register' ? 'block' : 'none';
+                document.getElementById('message').style.display = 'none';
+            });
+        });
+        
+        // Login
+        document.getElementById('btnLogin').addEventListener('click', async () => {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const messageDiv = document.getElementById('message');
+            
+            console.log('Intentando login con:', email);
+            
+            if (!email || !password) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = 'Por favor completa todos los campos';
+                return;
+            }
+            
+            messageDiv.className = 'message info';
+            messageDiv.textContent = 'Conectando con Supabase...';
+            messageDiv.style.display = 'block';
+            
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                
+                if (error) {
+                    console.error('Error login:', error);
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = error.message;
+                } else {
+                    console.log('Login exitoso:', data);
+                    messageDiv.className = 'message success';
+                    messageDiv.textContent = '✅ ¡Inicio de sesión exitoso! Redirigiendo...';
+                    setTimeout(() => { window.location.href = 'dashboard_completo.html'; }, 1500);
+                }
+            } catch (error) {
+                console.error('Excepción login:', error);
+                messageDiv.className = 'message error';
+                messageDiv.textContent = 'Error de conexión: ' + error.message;
+            }
+        });
+        
+        // Register
+        document.getElementById('btnRegister').addEventListener('click', async () => {
+            const nombre = document.getElementById('regNombre').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const confirmPassword = document.getElementById('regConfirmPassword').value;
+            const messageDiv = document.getElementById('message');
+            
+            console.log('Intentando registro con:', email);
+            
+            if (!nombre || !email || !password) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = 'Por favor completa todos los campos';
+                return;
+            }
+            if (password !== confirmPassword) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = 'Las contraseñas no coinciden';
+                return;
+            }
+            if (password.length < 6) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = 'La contraseña debe tener al menos 6 caracteres';
+                return;
+            }
+            
+            messageDiv.className = 'message info';
+            messageDiv.textContent = 'Conectando con Supabase...';
+            messageDiv.style.display = 'block';
+            
+            try {
+                const { data, error } = await supabase.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: { nombre_completo: nombre }
+                    }
+                });
+                
+                if (error) {
+                    console.error('Error registro:', error);
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = error.message;
+                } else {
+                    console.log('Registro exitoso:', data);
+                    messageDiv.className = 'message success';
+                    messageDiv.textContent = '✅ ¡Registro exitoso! Ahora puedes iniciar sesión.';
+                    setTimeout(() => { 
+                        document.querySelector('.tab[data-tab="login"]').click();
+                        document.getElementById('loginEmail').value = email;
+                        document.getElementById('message').style.display = 'none';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Excepción registro:', error);
+                messageDiv.className = 'message error';
+                messageDiv.textContent = 'Error de conexión: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>
