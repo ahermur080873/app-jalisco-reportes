@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://kit.fontawesome.com https://dujmncbgyamphqvuiroy.supabase.co https://*.supabase.co;">
     <title>Nuevo Reporte - Ciudadano</title>
     
     <!-- Supabase JS -->
@@ -37,7 +36,6 @@
             padding: 8px 15px;
             border-radius: 10px;
             cursor: pointer;
-            font-size: 14px;
         }
         .form-card {
             background: white;
@@ -119,117 +117,121 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        
-        let currentLocation = null;
-        let categorias = [];
-        
-        async function checkSession() {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                window.location.href = 'login.html';
-            }
-            return session;
-        }
-        
-        async function loadCategorias() {
-            const { data, error } = await supabase
-                .from('categorias_reporte')
-                .select('id_categoria, nombre, prioridad_por_defecto')
-                .eq('activo', true);
+        (function() {
+            // Configuración de Supabase
+            const SUPABASE_URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
+            const SUPABASE_ANON_KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
             
-            if (data) {
-                categorias = data;
-                const select = document.getElementById('categoria');
-                select.innerHTML = '<option value="">Selecciona una categoría...</option>';
-                data.forEach(cat => {
-                    select.innerHTML += `<option value="${cat.id_categoria}">${cat.nombre}</option>`;
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            
+            let currentLocation = null;
+            let categorias = [];
+            
+            async function checkSession() {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    window.location.href = 'login.html';
+                }
+                return session;
+            }
+            
+            async function loadCategorias() {
+                const { data, error } = await supabase
+                    .from('categorias_reporte')
+                    .select('id_categoria, nombre, prioridad_por_defecto')
+                    .eq('activo', true);
+                
+                if (data) {
+                    categorias = data;
+                    const select = document.getElementById('categoria');
+                    select.innerHTML = '<option value="">Selecciona una categoría...</option>';
+                    data.forEach(cat => {
+                        select.innerHTML += `<option value="${cat.id_categoria}">${cat.nombre}</option>`;
+                    });
+                }
+            }
+            
+            function getLocation() {
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) {
+                        reject(new Error('Geolocalización no soportada'));
+                        return;
+                    }
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000
+                    });
                 });
             }
-        }
-        
-        function getLocation() {
-            return new Promise((resolve, reject) => {
-                if (!navigator.geolocation) {
-                    reject(new Error('Geolocalización no soportada'));
-                    return;
-                }
-                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: true,
-                    timeout: 10000
-                });
-            });
-        }
-        
-        async function init() {
-            await checkSession();
-            await loadCategorias();
             
-            try {
-                const position = await getLocation();
-                currentLocation = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
-                document.getElementById('ubicacionInfo').innerHTML = `
-                    <i class="fas fa-check-circle"></i> Ubicación obtenida: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}
-                `;
-            } catch (error) {
-                document.getElementById('ubicacionInfo').innerHTML = `
-                    <i class="fas fa-exclamation-triangle"></i> No se pudo obtener tu ubicación. Usando ubicación por defecto (Centro GDL).
-                `;
-                currentLocation = { lat: 20.6761, lng: -103.3476 };
-            }
-            
-            document.getElementById('btnEnviar').addEventListener('click', async () => {
-                const categoriaId = document.getElementById('categoria').value;
-                const descripcion = document.getElementById('descripcion').value;
-                const btn = document.getElementById('btnEnviar');
-                const msgDiv = document.getElementById('message');
-                
-                if (!categoriaId || !descripcion) {
-                    msgDiv.className = 'message error';
-                    msgDiv.textContent = 'Por favor completa los campos obligatorios';
-                    return;
-                }
-                
-                btn.classList.add('loading');
-                btn.textContent = 'Enviando...';
+            async function init() {
+                await checkSession();
+                await loadCategorias();
                 
                 try {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    const categoria = categorias.find(c => c.id_categoria == categoriaId);
-                    
-                    const { error } = await supabase
-                        .from('reportes_ciudadanos')
-                        .insert({
-                            id_usuario: user.id,
-                            id_categoria: parseInt(categoriaId),
-                            latitud: currentLocation.lat,
-                            longitud: currentLocation.lng,
-                            descripcion: descripcion,
-                            estado: 'abierto',
-                            prioridad: categoria?.prioridad_por_defecto || 'media'
-                        });
-                    
-                    if (error) throw error;
-                    
-                    msgDiv.className = 'message success';
-                    msgDiv.textContent = '✅ Reporte enviado exitosamente. Redirigiendo...';
-                    setTimeout(() => { window.location.href = 'dashboard_completo.html'; }, 1500);
-                    
+                    const position = await getLocation();
+                    currentLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    document.getElementById('ubicacionInfo').innerHTML = `
+                        <i class="fas fa-check-circle"></i> Ubicación obtenida: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}
+                    `;
                 } catch (error) {
-                    msgDiv.className = 'message error';
-                    msgDiv.textContent = '❌ Error: ' + error.message;
-                    btn.classList.remove('loading');
-                    btn.textContent = 'Enviar Reporte';
+                    document.getElementById('ubicacionInfo').innerHTML = `
+                        <i class="fas fa-exclamation-triangle"></i> No se pudo obtener tu ubicación. Usando ubicación por defecto (Centro GDL).
+                    `;
+                    currentLocation = { lat: 20.6761, lng: -103.3476 };
                 }
-            });
-        }
-        
-        init();
+                
+                document.getElementById('btnEnviar').addEventListener('click', async () => {
+                    const categoriaId = document.getElementById('categoria').value;
+                    const descripcion = document.getElementById('descripcion').value;
+                    const btn = document.getElementById('btnEnviar');
+                    const msgDiv = document.getElementById('message');
+                    
+                    if (!categoriaId || !descripcion) {
+                        msgDiv.className = 'message error';
+                        msgDiv.textContent = 'Por favor completa los campos obligatorios';
+                        return;
+                    }
+                    
+                    btn.classList.add('loading');
+                    btn.textContent = 'Enviando...';
+                    
+                    try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        const categoria = categorias.find(c => c.id_categoria == categoriaId);
+                        
+                        const { error } = await supabase
+                            .from('reportes_ciudadanos')
+                            .insert({
+                                id_usuario: user.id,
+                                id_categoria: parseInt(categoriaId),
+                                latitud: currentLocation.lat,
+                                longitud: currentLocation.lng,
+                                descripcion: descripcion,
+                                estado: 'abierto',
+                                prioridad: categoria?.prioridad_por_defecto || 'media'
+                            });
+                        
+                        if (error) throw error;
+                        
+                        msgDiv.className = 'message success';
+                        msgDiv.textContent = '✅ Reporte enviado exitosamente. Redirigiendo...';
+                        setTimeout(() => { window.location.href = 'dashboard_completo.html'; }, 1500);
+                        
+                    } catch (error) {
+                        msgDiv.className = 'message error';
+                        msgDiv.textContent = '❌ Error: ' + error.message;
+                        btn.classList.remove('loading');
+                        btn.textContent = 'Enviar Reporte';
+                    }
+                });
+            }
+            
+            init();
+        })();
     </script>
 </body>
 </html>
