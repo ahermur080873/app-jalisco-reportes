@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://kit.fontawesome.com https://dujmncbgyamphqvuiroy.supabase.co https://*.supabase.co;">
     <title>Dashboard - Reportes Ciudadanos Jalisco</title>
     
     <!-- Leaflet CSS -->
@@ -38,7 +37,7 @@
         
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 20px;
             padding: 20px 30px;
         }
@@ -47,8 +46,8 @@
             background: white;
             border-radius: 16px;
             padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
         
         .stat-card .value { font-size: 32px; font-weight: bold; color: #1b5e3f; }
@@ -95,7 +94,7 @@
         .reports-table {
             background: white;
             border-radius: 16px;
-            margin: 0 30px 20px 30px;
+            margin: 0 30px 20px;
             overflow-x: auto;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
@@ -194,7 +193,7 @@
                     <tr><th>Fecha</th><th>Categoría</th><th>Ubicación</th><th>Descripción</th><th>Estado</th></tr>
                 </thead>
                 <tbody id="tableBody">
-                    <tr><td colspan="5" class="loading">Cargando datos desde Supabase...</td></tr>
+                    <tr><td colspan="5" class="loading">Cargando datos...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -218,18 +217,37 @@
             let map;
             let trendChart;
             let currentData = [];
+            let categoriasMap = {};
             
             function getMarkerColor(categoriaId) {
-                const colors = { 1: '#dc3545', 2: '#ffc107', 3: '#17a2b8', 4: '#28a745', 5: '#6f42c1', 6: '#fd7e14', 7: '#20c997' };
+                // Colores para diferentes categorías
+                const colors = {
+                    1: '#dc3545',  // Baches - Rojo
+                    2: '#ffc107',  // Semáforo - Amarillo
+                    3: '#17a2b8',  // Alumbrado - Azul
+                    4: '#28a745',  // Calidad del Agua - Verde
+                    5: '#6f42c1',  // Basura - Morado
+                    6: '#fd7e14',  // Vehículo abandonado - Naranja
+                    7: '#20c997'   // Otros - Verde menta
+                };
                 return colors[categoriaId] || '#6c757d';
             }
             
             function initMap() {
                 map = L.map('map').setView([20.6761, -103.3476], 11);
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO'
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
                 }).addTo(map);
                 console.log('Mapa inicializado');
+            }
+            
+            async function loadCategoriasMap() {
+                const { data } = await supabase.from('categorias_reporte').select('id_categoria, nombre');
+                if (data) {
+                    data.forEach(cat => {
+                        categoriasMap[cat.id_categoria] = cat.nombre;
+                    });
+                }
             }
             
             async function loadCategoriasFiltro() {
@@ -246,7 +264,7 @@
                 try {
                     let query = supabase
                         .from('reportes_ciudadanos')
-                        .select('*, categorias_reporte!inner(id_categoria, nombre)')
+                        .select('*')
                         .order('fecha_creacion', { ascending: false });
                     
                     const categoria = document.getElementById('filtroCategoria').value;
@@ -275,7 +293,7 @@
                     document.getElementById('resueltosCount').innerText = resueltos;
                     document.getElementById('zonasCount').innerText = zonas || 0;
                     
-                    // Mapa
+                    // Limpiar mapa
                     if (map) {
                         map.eachLayer((layer) => {
                             if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
@@ -284,21 +302,26 @@
                         });
                     }
                     
+                    // Agregar marcadores
                     let marcadoresAgregados = 0;
                     currentData.forEach(r => {
                         if (r.latitud && r.longitud) {
+                            const color = getMarkerColor(r.id_categoria);
+                            const categoriaNombre = categoriasMap[r.id_categoria] || 'Desconocida';
+                            
                             L.circleMarker([r.latitud, r.longitud], {
-                                radius: 10,
-                                fillColor: getMarkerColor(r.id_categoria),
+                                radius: r.estado === 'abierto' ? 12 : 9,
+                                fillColor: color,
                                 color: '#fff',
                                 weight: 2,
                                 opacity: 1,
                                 fillOpacity: 0.8
                             }).addTo(map).bindPopup(`
-                                <b>${r.categorias_reporte?.nombre || 'Reporte'}</b><br>
-                                ${r.descripcion?.substring(0, 100) || ''}<br>
-                                <b>Estado:</b> ${r.estado}<br>
-                                <b>Fecha:</b> ${new Date(r.fecha_creacion).toLocaleDateString()}
+                                <b>📢 ${categoriaNombre}</b><br>
+                                📝 ${r.descripcion?.substring(0, 100) || ''}<br>
+                                🏷️ Estado: <strong style="color:${color}">${r.estado}</strong><br>
+                                📅 ${new Date(r.fecha_creacion).toLocaleDateString()}<br>
+                                📍 ${r.latitud.toFixed(4)}, ${r.longitud.toFixed(4)}
                             `);
                             marcadoresAgregados++;
                         }
@@ -309,10 +332,11 @@
                     const tbody = document.getElementById('tableBody');
                     tbody.innerHTML = '';
                     currentData.slice(0, 20).forEach(r => {
+                        const categoriaNombre = categoriasMap[r.id_categoria] || 'Desconocida';
                         const row = tbody.insertRow();
                         row.innerHTML = `
                             <td>${new Date(r.fecha_creacion).toLocaleDateString()}</td>
-                            <td>${r.categorias_reporte?.nombre || '-'}</td>
+                            <td>${categoriaNombre}</td>
                             <td>${r.latitud.toFixed(4)}, ${r.longitud.toFixed(4)}</td>
                             <td>${r.descripcion?.substring(0, 60) || ''}${r.descripcion?.length > 60 ? '...' : ''}</td>
                             <td><span class="status-${r.estado}">${r.estado === 'en_proceso' ? 'En Proceso' : (r.estado?.charAt(0).toUpperCase() + r.estado?.slice(1))}</span></td>
@@ -372,9 +396,10 @@
                 }
                 
                 initMap();
+                await loadCategoriasMap();
                 await loadCategoriasFiltro();
                 await loadData();
-                setInterval(loadData, 60000);
+                setInterval(loadData, 30000);
             }
             
             init();
