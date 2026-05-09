@@ -82,7 +82,7 @@
         }
         
         .map-container h3 { padding: 15px 20px; background: #1b5e3f; color: white; margin: 0; }
-        #map { height: 400px; width: 100%; }
+        #map { height: 420px; width: 100%; }
         
         .chart-container {
             background: white;
@@ -104,9 +104,9 @@
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e9ecef; }
         th { background: #f8f9fa; font-weight: 600; }
         
-        .status-abierto { background: #ffedd5; color: #b91c1c; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
-        .status-en_proceso { background: #fff3e0; color: #c2410c; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
-        .status-resuelto { background: #e0f2e9; color: #0b5e2e; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
+        .status-abierto { background: #dc3545; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
+        .status-en_proceso { background: #ffae42; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
+        .status-resuelto { background: #28a745; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; font-weight: 600; }
         
         .floating-btn {
             position: fixed;
@@ -137,13 +137,33 @@
         
         .loading { text-align: center; padding: 40px; color: #666; }
         .error { text-align: center; padding: 40px; color: #dc3545; }
+        
+        /* Estilos de la leyenda */
+        .map-legend {
+            padding: 12px 20px;
+            background: white;
+            border-top: 1px solid #eee;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 12px;
+        }
+        .legend-section {
+            border-right: 1px solid #ddd;
+            padding-right: 20px;
+        }
+        .legend-section:last-child { border-right: none; }
+        .legend-title { font-weight: bold; margin-bottom: 8px; color: #333; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+        .legend-color { width: 20px; height: 20px; border-radius: 50%; }
+        .legend-border { width: 24px; height: 20px; border-radius: 50%; display: inline-block; }
     </style>
 </head>
 <body>
     <div class="header">
         <div>
             <h1><i class="fas fa-chart-line"></i> Reportes Ciudadanos Jalisco</h1>
-            <p>Sistema integrado de incidencias - Área Metropolitana de Guadalajara</p>
+            <p>Sistema de incidencias - Área Metropolitana de Guadalajara</p>
         </div>
         <div class="user-info">
             <span id="userName"><i class="fas fa-user-circle"></i> Cargando...</span>
@@ -178,6 +198,30 @@
         <div class="map-container">
             <h3><i class="fas fa-map-marker-alt"></i> Mapa de Reportes</h3>
             <div id="map"></div>
+            <div class="map-legend">
+                <div class="legend-section">
+                    <div class="legend-title">🎨 COLOR (Categoría)</div>
+                    <div class="legend-item"><div class="legend-color" style="background: #dc3545;"></div><span>Baches</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #ffc107;"></div><span>Semáforo</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #17a2b8;"></div><span>Alumbrado</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #0066cc;"></div><span>Calidad del Agua</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #6f42c1;"></div><span>Basura</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #fd7e14;"></div><span>Vehículo abandonado</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #20c997;"></div><span>Otros</span></div>
+                </div>
+                <div class="legend-section">
+                    <div class="legend-title">🔘 BORDE (Estado)</div>
+                    <div class="legend-item"><div style="width: 24px; height: 4px; background: #000; border-radius: 2px;"></div><span>Abierto (borde grueso)</span></div>
+                    <div class="legend-item"><div style="width: 24px; height: 3px; background: #333; border-radius: 2px;"></div><span>En proceso (borde medio)</span></div>
+                    <div class="legend-item"><div style="width: 24px; height: 2px; background: #888; border-radius: 2px;"></div><span>Resuelto (borde fino)</span></div>
+                </div>
+                <div class="legend-section">
+                    <div class="legend-title">📏 TAMAÑO</div>
+                    <div class="legend-item"><span style="font-size: 14px;">●</span><span>Grande = Abierto</span></div>
+                    <div class="legend-item"><span style="font-size: 12px;">●</span><span>Mediano = En proceso</span></div>
+                    <div class="legend-item"><span style="font-size: 10px;">●</span><span>Pequeño = Resuelto</span></div>
+                </div>
+            </div>
         </div>
         <div class="chart-container">
             <h3><i class="fas fa-chart-line"></i> Evolución (últimos 7 días)</h3>
@@ -219,18 +263,56 @@
             let currentData = [];
             let categoriasMap = {};
             
-            function getMarkerColor(categoriaId) {
-                // Colores para diferentes categorías
+            // ============================================
+            // OPCIÓN 1: BORDE = ESTADO, RELLENO = CATEGORÍA
+            // ============================================
+            
+            // Colores por CATEGORÍA (relleno del círculo)
+            function getCategoryColor(categoriaId) {
                 const colors = {
                     1: '#dc3545',  // Baches - Rojo
                     2: '#ffc107',  // Semáforo - Amarillo
-                    3: '#17a2b8',  // Alumbrado - Azul
-                    4: '#28a745',  // Calidad del Agua - Verde
+                    3: '#17a2b8',  // Alumbrado - Azul claro
+                    4: '#0066cc',  // Calidad del Agua - Azul fuerte
                     5: '#6f42c1',  // Basura - Morado
                     6: '#fd7e14',  // Vehículo abandonado - Naranja
                     7: '#20c997'   // Otros - Verde menta
                 };
                 return colors[categoriaId] || '#6c757d';
+            }
+            
+            // Color del borde según ESTADO
+            function getBorderColor(estado) {
+                if (estado === 'abierto') return '#000000';      // Negro (más contraste)
+                if (estado === 'en_proceso') return '#333333';   // Gris oscuro
+                if (estado === 'resuelto') return '#888888';     // Gris claro
+                return '#666666';
+            }
+            
+            // Grosor del borde según ESTADO
+            function getBorderWeight(estado) {
+                if (estado === 'abierto') return 5;              // Muy grueso
+                if (estado === 'en_proceso') return 3;           // Medio
+                return 2;                                         // Fino
+            }
+            
+            // Tamaño del radio según ESTADO
+            function getMarkerRadius(estado) {
+                if (estado === 'abierto') return 14;
+                if (estado === 'en_proceso') return 11;
+                return 9;
+            }
+            
+            // Obtener estilo completo del marcador
+            function getMarkerStyle(categoriaId, estado) {
+                return {
+                    radius: getMarkerRadius(estado),
+                    fillColor: getCategoryColor(categoriaId),
+                    color: getBorderColor(estado),
+                    weight: getBorderWeight(estado),
+                    opacity: 1,
+                    fillOpacity: 0.8
+                };
             }
             
             function initMap() {
@@ -248,6 +330,7 @@
                         categoriasMap[cat.id_categoria] = cat.nombre;
                     });
                 }
+                console.log('Categorías cargadas:', categoriasMap);
             }
             
             async function loadCategoriasFiltro() {
@@ -302,28 +385,28 @@
                         });
                     }
                     
-                    // Agregar marcadores
+                    // Agregar marcadores con estilo combinado
                     let marcadoresAgregados = 0;
                     currentData.forEach(r => {
-                        if (r.latitud && r.longitud) {
-                            const color = getMarkerColor(r.id_categoria);
-                            const categoriaNombre = categoriasMap[r.id_categoria] || 'Desconocida';
+                        if (r.latitud && r.longitud && r.id_categoria) {
+                            const style = getMarkerStyle(r.id_categoria, r.estado);
+                            const categoriaNombre = categoriasMap[r.id_categoria] || `Categoría ${r.id_categoria}`;
+                            const estadoTexto = r.estado === 'abierto' ? 'ABIERTO (Urgente)' : (r.estado === 'en_proceso' ? 'EN PROCESO' : 'RESUELTO');
                             
-                            L.circleMarker([r.latitud, r.longitud], {
-                                radius: r.estado === 'abierto' ? 12 : 9,
-                                fillColor: color,
-                                color: '#fff',
-                                weight: 2,
-                                opacity: 1,
-                                fillOpacity: 0.8
-                            }).addTo(map).bindPopup(`
-                                <b>📢 ${categoriaNombre}</b><br>
-                                📝 ${r.descripcion?.substring(0, 100) || ''}<br>
-                                🏷️ Estado: <strong style="color:${color}">${r.estado}</strong><br>
-                                📅 ${new Date(r.fecha_creacion).toLocaleDateString()}<br>
-                                📍 ${r.latitud.toFixed(4)}, ${r.longitud.toFixed(4)}
+                            L.circleMarker([r.latitud, r.longitud], style).addTo(map).bindPopup(`
+                                <div style="min-width: 200px;">
+                                    <b><i class="fas fa-tag"></i> ${categoriaNombre}</b><br>
+                                    <hr style="margin: 5px 0;">
+                                    <i class="fas fa-align-left"></i> <b>Descripción:</b><br>
+                                    ${r.descripcion?.substring(0, 150) || 'Sin descripción'}${r.descripcion?.length > 150 ? '...' : ''}<br><br>
+                                    <i class="fas fa-circle" style="color: ${style.color};"></i> <b>Estado:</b> <span style="color: ${style.color}; font-weight: bold;">${estadoTexto}</span><br>
+                                    <i class="fas fa-calendar"></i> <b>Fecha:</b> ${new Date(r.fecha_creacion).toLocaleDateString()}<br>
+                                    <i class="fas fa-map-marker-alt"></i> <b>Ubicación:</b> ${r.latitud.toFixed(4)}, ${r.longitud.toFixed(4)}
+                                </div>
                             `);
                             marcadoresAgregados++;
+                        } else {
+                            console.warn('Reporte sin categoría:', r.id_reporte, r.id_categoria);
                         }
                     });
                     console.log('Marcadores agregados:', marcadoresAgregados);
@@ -332,14 +415,14 @@
                     const tbody = document.getElementById('tableBody');
                     tbody.innerHTML = '';
                     currentData.slice(0, 20).forEach(r => {
-                        const categoriaNombre = categoriasMap[r.id_categoria] || 'Desconocida';
+                        const categoriaNombre = categoriasMap[r.id_categoria] || 'Sin categoría';
                         const row = tbody.insertRow();
                         row.innerHTML = `
                             <td>${new Date(r.fecha_creacion).toLocaleDateString()}</td>
                             <td>${categoriaNombre}</td>
                             <td>${r.latitud.toFixed(4)}, ${r.longitud.toFixed(4)}</td>
                             <td>${r.descripcion?.substring(0, 60) || ''}${r.descripcion?.length > 60 ? '...' : ''}</td>
-                            <td><span class="status-${r.estado}">${r.estado === 'en_proceso' ? 'En Proceso' : (r.estado?.charAt(0).toUpperCase() + r.estado?.slice(1))}</span></td>
+                            <td><span class="status-${r.estado}">${r.estado === 'en_proceso' ? 'En Proceso' : (r.estado === 'abierto' ? 'Abierto' : 'Resuelto')}</span></td>
                         `;
                     });
                     
@@ -361,7 +444,7 @@
                             labels: last7Days.map(d => d.substring(5)),
                             datasets: [{ label: 'Reportes por día', data: dailyCounts, borderColor: '#1b5e3f', tension: 0.3, fill: true }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true }
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Número de reportes' } } } }
                     });
                     
                     document.getElementById('lastUpdate').innerHTML = `<i class="fas fa-sync-alt"></i> Actualizado: ${new Date().toLocaleTimeString()}`;
@@ -390,10 +473,9 @@
                     return;
                 }
                 
-                const { data: userData } = await supabase.from('usuarios').select('nombre_completo').eq('id_usuario', session.user.id).single();
-                if (userData) {
-                    document.getElementById('userName').innerHTML = `<i class="fas fa-user-circle"></i> ${userData.nombre_completo.split(' ')[0]}`;
-                }
+                // Mostrar nombre del usuario
+                const userEmail = session.user.email.split('@')[0];
+                document.getElementById('userName').innerHTML = `<i class="fas fa-user-circle"></i> ${userEmail}`;
                 
                 initMap();
                 await loadCategoriasMap();
