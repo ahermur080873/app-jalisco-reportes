@@ -92,46 +92,46 @@
     </div>
     
     <div class="kpis-grid">
-        <div class="kpi-card"><div class="kpi-title">📊 Total Reportes</div><div class="kpi-value" id="totalReportes">--</div></div>
-        <div class="kpi-card"><div class="kpi-title">✅ Resueltos</div><div class="kpi-value" id="resueltos">--</div></div>
-        <div class="kpi-card"><div class="kpi-title">🟠 Abiertos</div><div class="kpi-value" id="abiertos">--</div></div>
-        <div class="kpi-card"><div class="kpi-title">📈 Tasa Resolución</div><div class="kpi-value" id="tasaResolucion">--%</div></div>
+        <div class="kpi-card"><div class="kpi-title">Total Reportes</div><div class="kpi-value" id="totalReportes">--</div></div>
+        <div class="kpi-card"><div class="kpi-title">Resueltos</div><div class="kpi-value" id="resueltos">--</div></div>
+        <div class="kpi-card"><div class="kpi-title">Abiertos</div><div class="kpi-value" id="abiertos">--</div></div>
+        <div class="kpi-card"><div class="kpi-title">Tasa Resolución</div><div class="kpi-value" id="tasaResolucion">--%</div></div>
     </div>
     
     <div class="dashboard-metrics">
         <div class="metric-card full-width">
-            <h3><i class="fas fa-building"></i> Eficiencia por Dependencia</h3>
+            <h3>Eficiencia por Dependencia</h3>
             <div id="departamentosList">Cargando datos...</div>
         </div>
         
         <div class="metric-card">
-            <h3><i class="fas fa-fire"></i> Top 5 Zonas Críticas</h3>
+            <h3>Top 5 Zonas Críticas</h3>
             <div id="topZonas">Cargando...</div>
         </div>
         
         <div class="metric-card">
-            <h3><i class="fas fa-chart-line"></i> Evolución (últimos 7 días)</h3>
+            <h3>Evolución (últimos 7 días)</h3>
             <canvas id="evolucionChart" height="180"></canvas>
         </div>
         
         <div class="metric-card">
-            <h3><i class="fas fa-tag"></i> Reportes por Categoría</h3>
+            <h3>Reportes por Categoría</h3>
             <div id="categoriasList">Cargando...</div>
         </div>
         
         <div class="metric-card">
-            <h3><i class="fas fa-hourglass-half"></i> Prioridad de Reportes</h3>
+            <h3>Prioridad de Reportes</h3>
             <div id="prioridadList">Cargando...</div>
         </div>
         
         <div class="metric-card">
-            <h3><i class="fas fa-chart-bar"></i> Reportes por Estado</h3>
+            <h3>Reportes por Estado</h3>
             <canvas id="estadoChart" height="180"></canvas>
         </div>
     </div>
     
     <div class="footer">
-        <i class="fas fa-chart-line"></i> Datos en tiempo real | Proyecto Seguridad Ciudadana Jalisco
+        Datos en tiempo real | Proyecto Seguridad Ciudadana Jalisco
     </div>
     
     <script>
@@ -167,8 +167,6 @@
             
             async function loadData() {
                 try {
-                    console.log('Cargando métricas...');
-                    
                     const { data: reportes, error } = await supabase
                         .from('reportes_ciudadanos')
                         .select('*');
@@ -179,8 +177,6 @@
                         document.getElementById('departamentosList').innerHTML = '<p>No hay reportes disponibles</p>';
                         return;
                     }
-                    
-                    console.log('Reportes cargados:', reportes.length);
                     
                     const total = reportes.length;
                     const resueltos = reportes.filter(r => r.estado === 'resuelto').length;
@@ -202,19 +198,26 @@
                     });
                     
                     const deptosSorted = Object.entries(deptoStats)
-                        .map(([nombre, data]) => ({ nombre, total: data.total, resueltos: data.resueltos, tasa: (data.resueltos / data.total * 100).toFixed(0) }))
+                        .map(([nombre, data]) => ({ 
+                            nombre, 
+                            total: data.total, 
+                            resueltos: data.resueltos, 
+                            tasa: (data.resueltos / data.total * 100).toFixed(0) 
+                        }))
                         .sort((a,b) => b.tasa - a.tasa);
                     
                     document.getElementById('departamentosList').innerHTML = `
                         <table style="width:100%">
-                            <thead><tr><th>Dependencia</th><th>Reportes</th><th>Resueltos</th><th>Tasa</th></tr></thead>
+                            <thead>
+                                <tr><th>Dependencia</th><th>Reportes</th><th>Resueltos</th><th>Tasa</th></tr>
+                            </thead>
                             <tbody>
                                 ${deptosSorted.map(d => `
                                     <tr>
-                                        <td><strong>${d.nombre}</strong>${d.nombre === 'Sin Asignar' ? ' ⚠️' : ''}${d.nombre === 'Seguridad Pública' ? ' 👮' : ''}${d.nombre === 'Medio Ambiente' ? ' 🌿' : ''}${d.nombre === 'Movilidad' ? ' 🚦' : ''}${d.nombre === 'Obras Públicas' ? ' 🏗️' : ''}${d.nombre === 'Servicios Públicos' ? ' 🧹' : ''}${d.nombre === 'Salud' ? ' 🏥' : ''}${d.nombre === 'Fiscalía' ? ' ⚖️' : ''}${d.nombre === 'SIAPA' ? ' 💧' : ''}${d.nombre === 'Protección Civil' ? ' 🚨' : ''}${d.nombre === 'Comunicaciones' ? ' 📡' : ''}这些
-                                        <td>${d.total}${d.total > 50 ? ' 🔥' : ''}这些
-                                        <td>${d.resueltos}${d.resueltos > 30 ? ' ✅' : ''}这些
-                                        <td><span style="color:${d.tasa >= 70 ? '#28a745' : (d.tasa >= 40 ? '#ffc107' : '#dc3545')}">${d.tasa}%</span>${d.tasa >= 80 ? ' 🎯' : (d.tasa >= 50 ? ' 📈' : ' ⚠️')}这些
+                                        <td>${d.nombre}这些
+                                        <td>${d.total}这些
+                                        <td>${d.resueltos}这些
+                                        <td><span style="color:${d.tasa >= 70 ? '#28a745' : (d.tasa >= 40 ? '#ffc107' : '#dc3545')}">${d.tasa}%</span>这些
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -231,7 +234,7 @@
                     document.getElementById('topZonas').innerHTML = `
                         <table style="width:100%">
                             <thead><tr><th>Ubicación</th><th>Reportes</th></tr></thead>
-                            <tbody>${topZonas.map(([zona, count]) => `<tr><td>${zona}${count > 30 ? ' 🔥' : (count > 15 ? ' ⚠️' : '')}${count > 40 ? ' 💀' : ''}这些<td><strong>${count}</strong>${count > 40 ? ' 🚨' : ''}这些</tr>`).join('')}</tbody>
+                            <tbody>${topZonas.map(([zona, count]) => `<tr><td>${zona}</td><td><strong>${count}</strong></td></tr>`).join('')}</tbody>
                         </table>
                     `;
                     
@@ -262,7 +265,7 @@
                     document.getElementById('categoriasList').innerHTML = `
                         <table style="width:100%">
                             <thead><tr><th>Categoría</th><th>Cantidad</th></tr></thead>
-                            <tbody>${catSorted.map(([nombre, count]) => `<tr><td>${nombre}${nombre === 'Calidad del Agua' ? ' 💧' : (nombre === 'Baches' ? ' 🕳️' : (nombre === 'Robo' ? ' 👮' : ''))}${count > 30 ? ' 🔥' : ''}这些<td><strong>${count}</strong>${count > 40 ? ' 🚨' : ''}这些</tr>`).join('')}</tbody>
+                            <tbody>${catSorted.map(([nombre, count]) => `<tr><td>${nombre}</td><td><strong>${count}</strong></td></tr>`).join('')}</tbody>
                         </table>
                     `;
                     
@@ -274,10 +277,10 @@
                         <table style="width:100%">
                             <thead><tr><th>Prioridad</th><th>Cantidad</th></tr></thead>
                             <tbody>
-                                <tr><td>🔴 Urgente${prioridadStats.urgente > 50 ? ' 🔥🚨❗' : (prioridadStats.urgente > 20 ? ' ⚠️' : '')}这些<td><strong>${prioridadStats.urgente || 0}</strong>${prioridadStats.urgente > 50 ? ' 🚨' : ''}</td></tr>
-                                <tr><td>🟠 Alta这些<td><strong>${prioridadStats.alta || 0}</strong>这些</tr>
-                                <tr><td>🟡 Media这些<td><strong>${prioridadStats.media || 0}</strong>这些</tr>
-                                <tr><td>🟢 Baja这些<td><strong>${prioridadStats.baja || 0}</strong>这些</tr>
+                                <tr><td>Urgente</td><td><strong>${prioridadStats.urgente || 0}</strong></td></tr>
+                                <tr><td>Alta</td><td><strong>${prioridadStats.alta || 0}</strong></td></tr>
+                                <tr><td>Media</td><td><strong>${prioridadStats.media || 0}</strong></td></tr>
+                                <tr><td>Baja</td><td><strong>${prioridadStats.baja || 0}</strong></td></tr>
                             </tbody>
                         </table>
                     `;
@@ -292,7 +295,6 @@
                     });
                     
                     document.getElementById('lastUpdate').innerHTML = `<i class="fas fa-sync-alt"></i> Actualizado: ${new Date().toLocaleTimeString()}`;
-                    console.log('Métricas actualizadas correctamente');
                     
                 } catch (error) {
                     console.error('Error:', error);
