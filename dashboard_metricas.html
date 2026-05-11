@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Metricas de Desempeno - Impacto Social</title>
+    <title>Metricas de Desempeno</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -76,12 +76,16 @@
             .dashboard-metrics { grid-template-columns: 1fr; }
             .metric-card.full-width { grid-column: span 1; }
         }
+        
+        .good { color: #28a745; font-weight: bold; }
+        .warning { color: #ffc107; font-weight: bold; }
+        .bad { color: #dc3545; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="header">
         <div>
-            <h1><i class="fas fa-chart-pie"></i> Metricas de Desempeno - Impacto Social</h1>
+            <h1><i class="fas fa-chart-pie"></i> Metricas de Desempeno</h1>
             <p>Indicadores de eficiencia por dependencia</p>
         </div>
         <div class="user-info">
@@ -143,26 +147,15 @@
             let evolucionChart, estadoChart;
             
             const categoriaDepartamento = {
-                1: 'Obras Publicas', 2: 'Movilidad', 3: 'Servicios Publicos',
-                4: 'Medio Ambiente', 5: 'Servicios Publicos', 6: 'Seguridad Publica',
-                7: 'Seguridad Publica', 8: 'Proteccion Civil', 9: 'Movilidad',
-                10: 'Movilidad', 11: 'Movilidad', 12: 'Seguridad Publica',
-                13: 'Seguridad Publica', 14: 'Fiscalia', 15: 'Fiscalia',
-                16: 'Seguridad Publica', 17: 'Servicios Publicos', 18: 'Servicios Publicos',
-                19: 'SIAPA', 20: 'Servicios Publicos', 21: 'Medio Ambiente',
-                22: 'Medio Ambiente', 23: 'Salud', 24: 'Salud',
-                25: 'Servicios Publicos', 26: 'Comunicaciones'
-            };
-            
-            const categoriaNombres = {
-                1: 'Baches', 2: 'Semaforos', 3: 'Alumbrado', 4: 'Calidad del Agua',
-                5: 'Basura', 6: 'Vehiculo abandonado', 7: 'Robo', 8: 'Accidente vial',
-                9: 'Senalamiento', 10: 'Paso peatonal', 11: 'Velocidad excesiva',
-                12: 'Acoso sexual', 13: 'Robo', 14: 'Cobro de piso', 15: 'Extorsion',
-                16: 'Agresion', 17: 'Bancas danadas', 18: 'Areas verdes',
-                19: 'Fugas de agua', 20: 'Alcantarilla', 21: 'Contaminacion auditiva',
-                22: 'Mala calidad del aire', 23: 'Fauna callejera', 24: 'Focos de infeccion',
-                25: 'Recoleccion basura', 26: 'Internet publico'
+                1: 'ObrasPublicas', 2: 'Movilidad', 3: 'ServPublicos',
+                4: 'MedioAmbiente', 5: 'ServPublicos', 6: 'SegPublica',
+                7: 'SegPublica', 8: 'ProtecCivil', 9: 'Movilidad',
+                10: 'Movilidad', 11: 'Movilidad', 12: 'SegPublica',
+                13: 'SegPublica', 14: 'Fiscalia', 15: 'Fiscalia',
+                16: 'SegPublica', 17: 'ServPublicos', 18: 'ServPublicos',
+                19: 'SIAPA', 20: 'ServPublicos', 21: 'MedioAmbiente',
+                22: 'MedioAmbiente', 23: 'Salud', 24: 'Salud',
+                25: 'ServPublicos', 26: 'Comunicaciones'
             };
             
             async function loadData() {
@@ -188,17 +181,21 @@
                     document.getElementById('abiertos').innerText = abiertos;
                     document.getElementById('tasaResolucion').innerText = tasa + '%';
                     
-                    // Eficiencia por Dependencia
                     const deptoStats = {};
                     reportes.forEach(r => {
-                        const depto = categoriaDepartamento[r.id_categoria] || 'Sin Asignar';
+                        const depto = categoriaDepartamento[r.id_categoria] || 'SinAsignar';
                         if (!deptoStats[depto]) deptoStats[depto] = { total: 0, resueltos: 0 };
                         deptoStats[depto].total++;
                         if (r.estado === 'resuelto') deptoStats[depto].resueltos++;
                     });
                     
                     const deptosSorted = Object.entries(deptoStats)
-                        .map(([nombre, data]) => ({ nombre, total: data.total, resueltos: data.resueltos, tasa: (data.resueltos / data.total * 100).toFixed(0) }))
+                        .map(([nombre, data]) => ({ 
+                            nombre, 
+                            total: data.total, 
+                            resueltos: data.resueltos, 
+                            tasa: (data.resueltos / data.total * 100).toFixed(0) 
+                        }))
                         .sort((a,b) => b.tasa - a.tasa);
                     
                     document.getElementById('departamentosList').innerHTML = `
@@ -212,7 +209,7 @@
                                         <td>${d.nombre}这些
                                         <td>${d.total}这些
                                         <td>${d.resueltos}这些
-                                        <td><span style="color:${d.tasa >= 70 ? '#28a745' : (d.tasa >= 40 ? '#ffc107' : '#dc3545')}">${d.tasa}%</span>这些
+                                        <td><span class="${d.tasa >= 70 ? 'good' : (d.tasa >= 40 ? 'warning' : 'bad')}">${d.tasa}%</span>这些
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -247,13 +244,26 @@
                     evolucionChart = new Chart(ctx, {
                         type: 'line',
                         data: { labels: last7Days.map(d => d.substring(5)), datasets: [{ label: 'Reportes', data: dailyCounts, borderColor: '#1b5e3f', backgroundColor: 'rgba(27,94,63,0.1)', fill: true, tension: 0.3 }] },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+                        options: { responsive: true, maintainAspectRatio: true }
                     });
                     
                     // Categorias
                     const catStats = {};
                     reportes.forEach(r => {
-                        const nombre = categoriaNombres[r.id_categoria] || `Cat-${r.id_categoria}`;
+                        let nombre = '';
+                        if (r.id_categoria === 1) nombre = 'Baches';
+                        else if (r.id_categoria === 2) nombre = 'Semaforos';
+                        else if (r.id_categoria === 3) nombre = 'Alumbrado';
+                        else if (r.id_categoria === 4) nombre = 'CalidadAgua';
+                        else if (r.id_categoria === 5) nombre = 'Basura';
+                        else if (r.id_categoria === 6) nombre = 'Vehiculo';
+                        else if (r.id_categoria === 7) nombre = 'Robo';
+                        else if (r.id_categoria === 8) nombre = 'Accidente';
+                        else if (r.id_categoria === 12) nombre = 'Acoso';
+                        else if (r.id_categoria === 14) nombre = 'CobroPiso';
+                        else if (r.id_categoria === 16) nombre = 'Agresion';
+                        else if (r.id_categoria === 19) nombre = 'FugasAgua';
+                        else nombre = `Cat${r.id_categoria}`;
                         catStats[nombre] = (catStats[nombre] || 0) + 1;
                     });
                     const catSorted = Object.entries(catStats).sort((a,b) => b[1] - a[1]).slice(0, 8);
@@ -272,10 +282,10 @@
                         <table style="width:100%">
                             <thead><tr><th>Prioridad</th><th>Cantidad</th></tr></thead>
                             <tbody>
-                                <tr><td>Urgente</td><td><strong>${prioridadStats.urgente || 0}</strong></td></tr>
-                                <tr><td>Alta</td><td><strong>${prioridadStats.alta || 0}</strong></td></tr>
-                                <tr><td>Media</td><td><strong>${prioridadStats.media || 0}</strong></td></tr>
-                                <tr><td>Baja</td><td><strong>${prioridadStats.baja || 0}</strong></td></tr>
+                                <tr><td>Urgente</td><td><strong>${prioridadStats.urgente || 0}</strong>这些</tr>
+                                <tr><td>Alta</td><td><strong>${prioridadStats.alta || 0}</strong>这些</tr>
+                                <tr><td>Media</td><td><strong>${prioridadStats.media || 0}</strong>这些</tr>
+                                <tr><td>Baja</td><td><strong>${prioridadStats.baja || 0}</strong>这些</tr>
                             </tbody>
                         </table>
                     `;
@@ -293,7 +303,7 @@
                     
                 } catch (error) {
                     console.error('Error:', error);
-                    document.getElementById('departamentosList').innerHTML = '<p style="color:red;">Error cargando datos: ' + error.message + '</p>';
+                    document.getElementById('departamentosList').innerHTML = '<p style="color:red;">Error cargando datos</p>';
                 }
             }
             
