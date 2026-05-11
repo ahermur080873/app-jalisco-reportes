@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metricas</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f0f2f5; }
+        .card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #1b5e3f; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; }
+        .good { color: green; }
+        .bad { color: red; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <h1>Metricas de Desempeno</h1>
+    <div id="stats" class="stats">
+        <div class="stat"><div>Total</div><div class="stat-value" id="total">-</div></div>
+        <div class="stat"><div>Resueltos</div><div class="stat-value" id="resueltos">-</div></div>
+        <div class="stat"><div>Abiertos</div><div class="stat-value" id="abiertos">-</div></div>
+        <div class="stat"><div>Tasa</div><div class="stat-value" id="tasa">-</div></div>
+    </div>
+    
+    <div class="card">
+        <h2>Eficiencia por Dependencia</h2>
+        <div id="departamentos"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Categorias</h2>
+        <div id="categorias"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Prioridad</h2>
+        <div id="prioridad"></div>
+    </div>
+    
+    <script>
+        const supabase = window.supabase.createClient(
+            'https://dujmncbgyamphqvuiroy.supabase.co',
+            'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A'
+        );
+        
+        const deptoMap = {
+            1:'ObrasPublicas',2:'Movilidad',3:'ServiciosPublicos',4:'MedioAmbiente',
+            5:'ServiciosPublicos',6:'SeguridadPublica',7:'SeguridadPublica',8:'ProteccionCivil',
+            9:'Movilidad',10:'Movilidad',11:'Movilidad',12:'SeguridadPublica',
+            13:'SeguridadPublica',14:'Fiscalia',15:'Fiscalia',16:'SeguridadPublica',
+            17:'ServiciosPublicos',18:'ServiciosPublicos',19:'SIAPA',20:'ServiciosPublicos',
+            21:'MedioAmbiente',22:'MedioAmbiente',23:'Salud',24:'Salud',25:'ServiciosPublicos',26:'Comunicaciones'
+        };
+        
+        async function load() {
+            const { data } = await supabase.from('reportes_ciudadanos').select('*');
+            if (!data) return;
+            
+            const total = data.length;
+            const resueltos = data.filter(r => r.estado === 'resuelto').length;
+            const abiertos = data.filter(r => r.estado === 'abierto').length;
+            document.getElementById('total').innerText = total;
+            document.getElementById('resueltos').innerText = resueltos;
+            document.getElementById('abiertos').innerText = abiertos;
+            document.getElementById('tasa').innerText = ((resueltos/total)*100).toFixed(1)+'%';
+            
+            const deptos = {};
+            data.forEach(r => {
+                const d = deptoMap[r.id_categoria] || 'Otros';
+                deptos[d] = deptos[d] || { total:0, res:0 };
+                deptos[d].total++;
+                if(r.estado === 'resuelto') deptos[d].res++;
+            });
+            
+            let html = '<table><tr><th>Dependencia</th><th>Total</th><th>Resueltos</th><th>Tasa</th></tr>';
+            for(const [d, v] of Object.entries(deptos).sort((a,b)=> (b[1].res/b[1].total) - (a[1].res/a[1].total))) {
+                const tasa = (v.res/v.total*100).toFixed(0);
+                let color = tasa>=70 ? 'good' : (tasa>=40 ? 'warning' : 'bad');
+                html += `<tr><td>${d}</td><td>${v.total}</td><td>${v.res}</td><td class="${color}">${tasa}%</td></tr>`;
+            }
+            html += '</table>';
+            document.getElementById('departamentos').innerHTML = html;
+            
+            const cats = {};
+            data.forEach(r => {
+                let nom = r.id_categoria;
+                cats[nom] = (cats[nom] || 0) + 1;
+            });
+            let catHtml = '<table><tr><th>Categoria</th><th>Cantidad</th></tr>';
+            for(const [c, count] of Object.entries(cats).sort((a,b)=>b[1]-a[1])) {
+                catHtml += `<tr><td>Cat ${c}</td><td>${count}</td></tr>`;
+            }
+            catHtml += '</table>';
+            document.getElementById('categorias').innerHTML = catHtml;
+            
+            const prioridad = { urgente:0, alta:0, media:0, baja:0 };
+            data.forEach(r => { if(r.prioridad) prioridad[r.prioridad]++; });
+            document.getElementById('prioridad').innerHTML = `
+                <table><tr><th>Prioridad</th><th>Cantidad</th></tr>
+                <tr><td>Urgente</td><td>${prioridad.urgente}</td></tr>
+                <tr><td>Alta</td><td>${prioridad.alta}</td></tr>
+                <tr><td>Media</td><td>${prioridad.media}</td></tr>
+                <tr><td>Baja</td><td>${prioridad.baja}</td></tr>
+                </table>
+            `;
+        }
+        
+        async function init() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) window.location.href = 'login.html';
+            await load();
+        }
+        init();
+    </script>
+</body>
+</html>
