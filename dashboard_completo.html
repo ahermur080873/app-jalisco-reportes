@@ -8,6 +8,10 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
+    <!-- Marker Cluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
@@ -138,7 +142,7 @@
         .loading { text-align: center; padding: 40px; color: #666; }
         .error { text-align: center; padding: 40px; color: #dc3545; }
         
-        /* Estilos de la leyenda */
+        /* Leyenda */
         .map-legend {
             padding: 12px 20px;
             background: white;
@@ -153,10 +157,9 @@
             padding-right: 20px;
         }
         .legend-section:last-child { border-right: none; }
-        .legend-title { font-weight: bold; margin-bottom: 8px; color: #333; }
+        .legend-title { font-weight: bold; margin-bottom: 8px; color: #333; font-size: 13px; }
         .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
         .legend-color { width: 20px; height: 20px; border-radius: 50%; }
-        .legend-border { width: 24px; height: 20px; border-radius: 50%; display: inline-block; }
     </style>
 </head>
 <body>
@@ -207,7 +210,7 @@
                     <div class="legend-item"><div class="legend-color" style="background: #0066cc;"></div><span>Calidad del Agua</span></div>
                     <div class="legend-item"><div class="legend-color" style="background: #6f42c1;"></div><span>Basura</span></div>
                     <div class="legend-item"><div class="legend-color" style="background: #fd7e14;"></div><span>Vehículo abandonado</span></div>
-                    <div class="legend-item"><div class="legend-color" style="background: #20c997;"></div><span>Otros</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #20c997;"></div><span>Reporte de robo</span></div>
                 </div>
                 <div class="legend-section">
                     <div class="legend-title">🔘 BORDE (Estado)</div>
@@ -216,10 +219,8 @@
                     <div class="legend-item"><div style="width: 24px; height: 2px; background: #888; border-radius: 2px;"></div><span>Resuelto (borde fino)</span></div>
                 </div>
                 <div class="legend-section">
-                    <div class="legend-title">📏 TAMAÑO</div>
-                    <div class="legend-item"><span style="font-size: 14px;">●</span><span>Grande = Abierto</span></div>
-                    <div class="legend-item"><span style="font-size: 12px;">●</span><span>Mediano = En proceso</span></div>
-                    <div class="legend-item"><span style="font-size: 10px;">●</span><span>Pequeño = Resuelto</span></div>
+                    <div class="legend-title">📦 AGRUPAMIENTO</div>
+                    <div class="legend-item"><span style="background: #1b5e3f; color: white; padding: 2px 8px; border-radius: 20px; font-size: 11px;">15</span><span>Reportes agrupados</span></div>
                 </div>
             </div>
         </div>
@@ -250,6 +251,7 @@
     </div>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     
     <script>
         (function() {
@@ -262,10 +264,7 @@
             let trendChart;
             let currentData = [];
             let categoriasMap = {};
-            
-            // ============================================
-            // OPCIÓN 1: BORDE = ESTADO, RELLENO = CATEGORÍA
-            // ============================================
+            let markersCluster; // Grupo de clustering
             
             // Colores por CATEGORÍA (relleno del círculo)
             function getCategoryColor(categoriaId) {
@@ -276,24 +275,24 @@
                     4: '#0066cc',  // Calidad del Agua - Azul fuerte
                     5: '#6f42c1',  // Basura - Morado
                     6: '#fd7e14',  // Vehículo abandonado - Naranja
-                    7: '#20c997'   // Otros - Verde menta
+                    7: '#20c997'   // Reporte de robo - Verde menta
                 };
                 return colors[categoriaId] || '#6c757d';
             }
             
             // Color del borde según ESTADO
             function getBorderColor(estado) {
-                if (estado === 'abierto') return '#000000';      // Negro (más contraste)
-                if (estado === 'en_proceso') return '#333333';   // Gris oscuro
-                if (estado === 'resuelto') return '#888888';     // Gris claro
+                if (estado === 'abierto') return '#000000';
+                if (estado === 'en_proceso') return '#333333';
+                if (estado === 'resuelto') return '#888888';
                 return '#666666';
             }
             
             // Grosor del borde según ESTADO
             function getBorderWeight(estado) {
-                if (estado === 'abierto') return 5;              // Muy grueso
-                if (estado === 'en_proceso') return 3;           // Medio
-                return 2;                                         // Fino
+                if (estado === 'abierto') return 5;
+                if (estado === 'en_proceso') return 3;
+                return 2;
             }
             
             // Tamaño del radio según ESTADO
@@ -320,7 +319,14 @@
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
                 }).addTo(map);
-                console.log('Mapa inicializado');
+                
+                // Crear grupo de clustering
+                markersCluster = L.markerClusterGroup({
+                    chunkedLoading: true,  // Carga progresiva para muchos marcadores
+                    maxClusterRadius: 60   // Radio máximo de agrupación en píxeles
+                });
+                map.addLayer(markersCluster);
+                console.log('Mapa inicializado con clustering');
             }
             
             async function loadCategoriasMap() {
@@ -376,16 +382,12 @@
                     document.getElementById('resueltosCount').innerText = resueltos;
                     document.getElementById('zonasCount').innerText = zonas || 0;
                     
-                    // Limpiar mapa
-                    if (map) {
-                        map.eachLayer((layer) => {
-                            if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
-                                map.removeLayer(layer);
-                            }
-                        });
+                    // Limpiar marcadores del cluster
+                    if (markersCluster) {
+                        markersCluster.clearLayers();
                     }
                     
-                    // Agregar marcadores con estilo combinado
+                    // Agregar marcadores al cluster
                     let marcadoresAgregados = 0;
                     currentData.forEach(r => {
                         if (r.latitud && r.longitud && r.id_categoria) {
@@ -393,8 +395,9 @@
                             const categoriaNombre = categoriasMap[r.id_categoria] || `Categoría ${r.id_categoria}`;
                             const estadoTexto = r.estado === 'abierto' ? 'ABIERTO (Urgente)' : (r.estado === 'en_proceso' ? 'EN PROCESO' : 'RESUELTO');
                             
-                            L.circleMarker([r.latitud, r.longitud], style).addTo(map).bindPopup(`
-                                <div style="min-width: 200px;">
+                            const marker = L.circleMarker([r.latitud, r.longitud], style);
+                            marker.bindPopup(`
+                                <div style="min-width: 220px;">
                                     <b><i class="fas fa-tag"></i> ${categoriaNombre}</b><br>
                                     <hr style="margin: 5px 0;">
                                     <i class="fas fa-align-left"></i> <b>Descripción:</b><br>
@@ -404,12 +407,11 @@
                                     <i class="fas fa-map-marker-alt"></i> <b>Ubicación:</b> ${r.latitud.toFixed(4)}, ${r.longitud.toFixed(4)}
                                 </div>
                             `);
+                            markersCluster.addLayer(marker);
                             marcadoresAgregados++;
-                        } else {
-                            console.warn('Reporte sin categoría:', r.id_reporte, r.id_categoria);
                         }
                     });
-                    console.log('Marcadores agregados:', marcadoresAgregados);
+                    console.log('Marcadores agregados al cluster:', marcadoresAgregados);
                     
                     // Tabla
                     const tbody = document.getElementById('tableBody');
@@ -444,7 +446,7 @@
                             labels: last7Days.map(d => d.substring(5)),
                             datasets: [{ label: 'Reportes por día', data: dailyCounts, borderColor: '#1b5e3f', tension: 0.3, fill: true }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Número de reportes' } } } }
+                        options: { responsive: true, maintainAspectRatio: true }
                     });
                     
                     document.getElementById('lastUpdate').innerHTML = `<i class="fas fa-sync-alt"></i> Actualizado: ${new Date().toLocaleTimeString()}`;
@@ -473,7 +475,6 @@
                     return;
                 }
                 
-                // Mostrar nombre del usuario
                 const userEmail = session.user.email.split('@')[0];
                 document.getElementById('userName').innerHTML = `<i class="fas fa-user-circle"></i> ${userEmail}`;
                 
