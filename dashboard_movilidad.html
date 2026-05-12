@@ -2,11 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Movilidad - Transporte Público Jalisco</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     
@@ -26,7 +26,8 @@
         }
         .header h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
         .user-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-        .btn-volver { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 18px; border-radius: 25px; cursor: pointer; text-decoration: none; font-size: 14px; }
+        .btn-volver { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 18px; border-radius: 25px; cursor: pointer; text-decoration: none; font-size: 14px; transition: background 0.3s; }
+        .btn-volver:hover { background: rgba(255,255,255,0.3); }
         .last-update { background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 20px; font-size: 12px; }
         
         .filtros {
@@ -46,6 +47,7 @@
             border-radius: 10px;
             background: white;
             min-width: 250px;
+            font-family: inherit;
         }
         .btn-refresh {
             background: #1b5e3f;
@@ -54,7 +56,10 @@
             padding: 10px 20px;
             border-radius: 10px;
             cursor: pointer;
+            font-family: inherit;
+            transition: background 0.3s;
         }
+        .btn-refresh:hover { background: #0b3d2e; }
         
         .dashboard {
             display: flex;
@@ -69,7 +74,7 @@
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
-        .map-container h3 { padding: 15px 20px; background: #1b5e3f; color: white; margin: 0; }
+        .map-container h3 { padding: 15px 20px; background: #1b5e3f; color: white; margin: 0; font-size: 18px; }
         #map { height: 550px; width: 100%; }
         
         .info-panel {
@@ -80,7 +85,7 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             overflow-y: auto;
         }
-        .info-panel h3 { margin-bottom: 15px; color: #1b5e3f; }
+        .info-panel h3 { margin-bottom: 15px; color: #1b5e3f; font-size: 18px; display: flex; align-items: center; gap: 8px; }
         .unidad-item {
             background: #f8f9fa;
             border-radius: 12px;
@@ -88,15 +93,17 @@
             margin-bottom: 12px;
             border-left: 4px solid #1b5e3f;
         }
-        .unidad-nombre { font-weight: bold; }
+        .unidad-nombre { font-weight: bold; font-size: 15px; }
         .unidad-detalle { font-size: 12px; color: #666; margin-top: 5px; }
         
-        .footer { text-align: center; padding: 20px; color: #6c757d; font-size: 12px; }
+        .footer { text-align: center; padding: 20px; color: #6c757d; font-size: 12px; border-top: 1px solid #e9ecef; margin-top: 20px; }
         
         @media (max-width: 900px) {
             .dashboard { flex-direction: column; }
             .filtros { flex-direction: column; align-items: stretch; }
         }
+        
+        .no-data { text-align: center; padding: 30px; color: #999; }
     </style>
 </head>
 <body>
@@ -126,8 +133,8 @@
         </div>
         <div class="info-panel">
             <h3><i class="fas fa-bus"></i> Unidades Activas</h3>
-            <div id="unidadesLista">Cargando unidades...</div>
-            <p style="font-size:12px; color:#888; margin-top:15px;">* Para ver unidades en tiempo real, los conductores deben iniciar sesión y compartir ubicación.</p>
+            <div id="unidadesLista" class="no-data">Cargando unidades...</div>
+            <p style="font-size:12px; color:#888; margin-top:15px;">📌 Los conductores deben iniciar sesión y compartir ubicación para aparecer en tiempo real</p>
         </div>
     </div>
     
@@ -136,98 +143,140 @@
     </div>
     
     <script>
-        const SUPABASE_URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        
-        let map;
-        let markers = [];
-        let rutasMap = {};
-        
-        const coloresRuta = {
-            1: '#dc3545', 2: '#28a745', 3: '#17a2b8', 4: '#fd7e14', 5: '#20c997'
-        };
-        
-        async function cargarRutas() {
-            const { data } = await supabase.from('rutas_transporte').select('id_ruta, nombre_ruta, color');
-            if (data) {
-                const select = document.getElementById('filtroRuta');
-                data.forEach(r => {
-                    rutasMap[r.id_ruta] = r.nombre_ruta;
-                    select.innerHTML += `<option value="${r.id_ruta}">${r.nombre_ruta}</option>`;
-                });
+        (function() {
+            const SUPABASE_URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
+            const SUPABASE_KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            
+            let map;
+            let markersUnidades = [];
+            let markersParadas = [];
+            let rutasMap = {};
+            let intervalo = null;
+            
+            const coloresRuta = {
+                1: '#dc3545', 2: '#28a745', 3: '#17a2b8', 4: '#fd7e14', 5: '#20c997'
+            };
+            
+            function initMap() {
+                map = L.map('map').setView([20.6761, -103.3476], 12);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+                }).addTo(map);
+                console.log('Mapa iniciado');
             }
-        }
-        
-        async function cargarParadas() {
-            const { data } = await supabase.from('paradas').select('*');
-            if (data) {
-                data.forEach(p => {
-                    const marker = L.marker([p.latitud, p.longitud], {
-                        icon: L.divIcon({ html: '<i class="fas fa-map-marker-alt" style="color:#6c757d; font-size:20px;"></i>', iconSize: [20, 20] })
-                    }).addTo(map).bindPopup(`<b>🚏 ${p.nombre}</b><br>📍 ${p.direccion || 'Sin dirección'}`);
-                    markers.push(marker);
-                });
+            
+            async function cargarRutas() {
+                const { data, error } = await supabase.from('rutas_transporte').select('id_ruta, nombre_ruta, color');
+                if (error) { console.error('Error cargando rutas:', error); return; }
+                if (data) {
+                    const select = document.getElementById('filtroRuta');
+                    data.forEach(r => {
+                        rutasMap[r.id_ruta] = r.nombre_ruta;
+                        select.innerHTML += `<option value="${r.id_ruta}">${r.nombre_ruta}</option>`;
+                    });
+                }
             }
-        }
-        
-        async function cargarUnidadesActivas() {
-            const rutaId = document.getElementById('filtroRuta').value;
-            let query = supabase.from('viajes_activos').select('*, usuarios!inner(nombre_completo), rutas_transporte!inner(nombre_ruta, color)').eq('estado', 'activo');
-            if (rutaId) query = query.eq('id_ruta', rutaId);
             
-            const { data, error } = await query;
-            if (error) { console.error('Error:', error); return; }
+            async function cargarParadas() {
+                const { data, error } = await supabase.from('paradas').select('*');
+                if (error) { console.error('Error cargando paradas:', error); return; }
+                if (data) {
+                    markersParadas.forEach(m => map.removeLayer(m));
+                    markersParadas = [];
+                    
+                    data.forEach(p => {
+                        const marker = L.marker([p.latitud, p.longitud], {
+                            icon: L.divIcon({
+                                html: '<i class="fas fa-map-marker-alt" style="color:#6c757d; font-size:22px;"></i>',
+                                iconSize: [22, 22],
+                                className: 'parada-icon'
+                            })
+                        }).addTo(map).bindPopup(`<b>🚏 ${p.nombre}</b><br>📍 ${p.direccion || 'Sin dirección'}<br>${p.accesible ? '♿ Accesible' : ''}`);
+                        markersParadas.push(marker);
+                    });
+                    console.log('Paradas cargadas:', data.length);
+                }
+            }
             
-            // Limpiar marcadores de unidades (conservar paradas)
-            markers.forEach(m => { if (m.options.icon?.options?.html?.includes('fa-bus')) map.removeLayer(m); });
-            markers = markers.filter(m => !m.options.icon?.options?.html?.includes('fa-bus'));
-            
-            if (data && data.length > 0) {
-                document.getElementById('unidadesLista').innerHTML = data.map(u => `
-                    <div class="unidad-item">
-                        <div class="unidad-nombre"><i class="fas fa-bus"></i> ${rutasMap[u.id_ruta] || 'Ruta ' + u.id_ruta}</div>
-                        <div class="unidad-detalle">Conductor: ${u.usuarios?.nombre_completo}<br>Actualizado: ${new Date(u.ultima_actualizacion).toLocaleTimeString()}<br>Velocidad: ${u.velocidad_actual_kmh || 0} km/h</div>
-                    </div>
-                `).join('');
+            async function cargarUnidadesActivas() {
+                const rutaId = document.getElementById('filtroRuta').value;
+                let query = supabase.from('viajes_activos').select('*, usuarios!inner(nombre_completo), rutas_transporte!inner(nombre_ruta, color)').eq('estado', 'activo');
+                if (rutaId) query = query.eq('id_ruta', parseInt(rutaId));
                 
-                data.forEach(u => {
-                    if (u.ultima_latitud && u.ultima_longitud) {
-                        const color = coloresRuta[u.id_ruta] || '#1b5e3f';
-                        const marker = L.circleMarker([u.ultima_latitud, u.ultima_longitud], {
-                            radius: 10, fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.8
-                        }).addTo(map).bindPopup(`<b>🚌 ${rutasMap[u.id_ruta]}</b><br>Conductor: ${u.usuarios?.nombre_completo}<br>Velocidad: ${u.velocidad_actual_kmh || 0} km/h`);
-                        markers.push(marker);
-                    }
-                });
-            } else {
-                document.getElementById('unidadesLista').innerHTML = '<p>No hay unidades activas en este momento</p>';
+                const { data, error } = await query;
+                if (error) { console.error('Error cargando unidades:', error); return; }
+                
+                // Limpiar marcadores de unidades
+                markersUnidades.forEach(m => map.removeLayer(m));
+                markersUnidades = [];
+                
+                if (data && data.length > 0) {
+                    document.getElementById('unidadesLista').innerHTML = data.map(u => `
+                        <div class="unidad-item">
+                            <div class="unidad-nombre"><i class="fas fa-bus"></i> ${rutasMap[u.id_ruta] || 'Ruta ' + u.id_ruta}</div>
+                            <div class="unidad-detalle">
+                                Conductor: ${u.usuarios?.nombre_completo || 'N/A'}<br>
+                                📍 Actualizado: ${new Date(u.ultima_actualizacion).toLocaleTimeString()}<br>
+                                🚀 Velocidad: ${u.velocidad_actual_kmh || 0} km/h
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    data.forEach(u => {
+                        if (u.ultima_latitud && u.ultima_longitud) {
+                            const color = coloresRuta[u.id_ruta] || '#1b5e3f';
+                            const marker = L.circleMarker([u.ultima_latitud, u.ultima_longitud], {
+                                radius: 10,
+                                fillColor: color,
+                                color: '#fff',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            }).addTo(map).bindPopup(`
+                                <b>🚌 ${rutasMap[u.id_ruta] || 'Ruta ' + u.id_ruta}</b><br>
+                                Conductor: ${u.usuarios?.nombre_completo || 'N/A'}<br>
+                                Velocidad: ${u.velocidad_actual_kmh || 0} km/h<br>
+                                Última actualización: ${new Date(u.ultima_actualizacion).toLocaleTimeString()}
+                            `);
+                            markersUnidades.push(marker);
+                        }
+                    });
+                    console.log('Unidades activas:', data.length);
+                } else {
+                    document.getElementById('unidadesLista').innerHTML = '<div class="no-data">🚌 No hay unidades activas en este momento</div>';
+                }
             }
-        }
-        
-        function initMap() {
-            map = L.map('map').setView([20.6761, -103.3476], 12);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
-        }
-        
-        async function actualizarDashboard() {
-            await cargarUnidadesActivas();
-            document.getElementById('lastUpdate').innerHTML = `<i class="fas fa-sync-alt"></i> Actualizado: ${new Date().toLocaleTimeString()}`;
-        }
-        
-        async function init() {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) { window.location.href = 'login.html'; return; }
-            document.getElementById('userName').innerHTML = `<i class="fas fa-user-circle"></i> ${session.user.email.split('@')[0]}`;
-            initMap();
-            await cargarRutas();
-            await cargarParadas();
-            await actualizarDashboard();
-            setInterval(actualizarDashboard, 10000);
-            document.getElementById('filtroRuta').addEventListener('change', actualizarDashboard);
-            document.getElementById('btnRefresh').addEventListener('click', actualizarDashboard);
-        }
-        init();
+            
+            async function actualizarDashboard() {
+                console.log('🔄 Actualizando dashboard de movilidad...');
+                await cargarUnidadesActivas();
+                document.getElementById('lastUpdate').innerHTML = `<i class="fas fa-sync-alt"></i> Actualizado: ${new Date().toLocaleTimeString()}`;
+            }
+            
+            async function init() {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                const userEmail = session.user.email.split('@')[0];
+                document.getElementById('userName').innerHTML = `<i class="fas fa-user-circle"></i> ${userEmail}`;
+                
+                initMap();
+                await cargarRutas();
+                await cargarParadas();
+                await actualizarDashboard();
+                
+                if (intervalo) clearInterval(intervalo);
+                intervalo = setInterval(actualizarDashboard, 15000);
+                
+                document.getElementById('filtroRuta').addEventListener('change', actualizarDashboard);
+                document.getElementById('btnRefresh').addEventListener('click', actualizarDashboard);
+            }
+            
+            init();
+        })();
     </script>
 </body>
 </html>
