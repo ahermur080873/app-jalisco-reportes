@@ -8,9 +8,6 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
-    <!-- Chart.js (opcional, para futuros gráficos) -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
     <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
@@ -50,7 +47,7 @@
             text-align: center;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
-        .stat-card .value { font-size: 32px; font-weight: bold; color: #1b5e3f; }
+        .stat-card .value { font-size: 28px; font-weight: bold; color: #1b5e3f; }
         .stat-card .label { color: #666; font-size: 14px; margin-top: 5px; }
         
         .dashboard {
@@ -94,7 +91,7 @@
             border-left: 4px solid #dc3545;
             padding-left: 12px;
         }
-        .fila { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+        .fila { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; flex-wrap: wrap; gap: 8px; }
         .fila strong { color: #495057; }
         
         .reports-table {
@@ -162,7 +159,7 @@
         <div class="stat-card"><div class="value" id="tiempoActivo">--</div><div class="label">Tiempo activo</div></div>
         <div class="stat-card"><div class="value" id="totalPolicias">--</div><div class="label">Policías cercanos</div></div>
         <div class="stat-card"><div class="value" id="totalNotificaciones">--</div><div class="label">Notificaciones</div></div>
-        <div class="stat-card"><div class="value" id="totalUbicaciones">--</div><div class="label">Ubicaciones</div></div>
+        <div class="stat-card"><div class="value" id="totalUbicaciones">--</div><div class="label">Ubicaciones registradas</div></div>
     </div>
     
     <div class="dashboard">
@@ -197,14 +194,14 @@
     <div class="reports-table">
         <h3><i class="fas fa-history"></i> Historial de Ubicaciones</h3>
         <div style="overflow-x: auto;">
-            <table id="tablaUbicaciones">
+            <table>
                 <thead>
                     <tr><th>Hora</th><th>Latitud</th><th>Longitud</th><th>Velocidad</th></tr>
                 </thead>
                 <tbody id="tablaBody">
-                    <tr><td colspan="4" class="no-data">Cargando...</td></tr>
+                    <tr><td colspan="4" class="no-data">Cargando...</td>
                 </tbody>
-            </table>
+             
         </div>
     </div>
     
@@ -229,6 +226,21 @@
             let ubicacionesMarkers = [];
             let intervalo = null;
             
+            function formatearTiempo(ms) {
+                const totalSegundos = Math.floor(Math.abs(ms) / 1000);
+                const horas = Math.floor(totalSegundos / 3600);
+                const minutos = Math.floor((totalSegundos % 3600) / 60);
+                const segundos = totalSegundos % 60;
+                
+                if (horas > 0) {
+                    return `${horas}h ${minutos}m ${segundos}s`;
+                } else if (minutos > 0) {
+                    return `${minutos}m ${segundos}s`;
+                } else {
+                    return `${segundos}s`;
+                }
+            }
+            
             function getEventoStyle() {
                 return { radius: 18, fillColor: '#dc3545', color: '#fff', weight: 3, opacity: 1, fillOpacity: 0.9 };
             }
@@ -244,14 +256,13 @@
             function initMap() {
                 map = L.map('map').setView([20.6761, -103.3476], 13);
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO'
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
                 }).addTo(map);
                 console.log('Mapa iniciado');
             }
             
             async function cargarDatos() {
                 try {
-                    // Obtener emergencia activa
                     const { data: evento, error } = await supabase
                         .from('eventos_emergencia')
                         .select('*')
@@ -266,7 +277,15 @@
                     
                     if (evento && evento.length > 0) {
                         const e = evento[0];
-                        const minutos = Math.floor((new Date() - new Date(e.fecha_activacion)) / 60000);
+                        
+                        // Cálculo del tiempo activo (positivo, formato legible)
+                        const ahora = new Date();
+                        const activacion = new Date(e.fecha_activacion);
+                        const diferenciaMs = ahora - activacion;
+                        const tiempoTexto = formatearTiempo(diferenciaMs);
+                        
+                        // Estadísticas
+                        document.getElementById('tiempoActivo').innerHTML = tiempoTexto;
                         
                         // Obtener ciudadano
                         let nombreCiudadano = 'Ciudadano';
@@ -277,7 +296,6 @@
                             .single();
                         if (ciudadano) nombreCiudadano = ciudadano.nombre_completo;
                         
-                        document.getElementById('tiempoActivo').innerHTML = `${minutos} <span style="font-size:14px;">min</span>`;
                         document.getElementById('emergenciaInfo').innerHTML = `
                             <div class="fila"><strong>ID:</strong> <span>#${e.id_evento}</span></div>
                             <div class="fila"><strong>Ciudadano:</strong> <span>${nombreCiudadano}</span></div>
@@ -291,7 +309,6 @@
                             .bindPopup(`<b>🚨 EMERGENCIA ACTIVA</b><br>ID: ${e.id_evento}<br>${nombreCiudadano}`);
                         map.setView([e.latitud, e.longitud], 14);
                         
-                        // Cargar trayectoria
                         await cargarTrayectoria(e.id_evento);
                         await cargarNotificaciones(e.id_evento);
                     } else {
@@ -305,7 +322,6 @@
                         ubicacionesMarkers = [];
                     }
                     
-                    // Cargar policías
                     await cargarPolicias();
                     
                 } catch (err) {
@@ -347,17 +363,17 @@
                         <div class="fila">
                             <span>🕒 ${new Date(u.timestamp).toLocaleTimeString()}</span>
                             <span>📍 ${u.latitud.toFixed(5)}, ${u.longitud.toFixed(5)}</span>
+                            <span>🚗 ${u.velocidad_kmh || 0} km/h</span>
                         </div>
                     `).join('');
                     
-                    // Tabla
                     const tbody = document.getElementById('tablaBody');
                     tbody.innerHTML = ubicaciones.slice().reverse().map(u => `
                         <tr>
-                            <td>${new Date(u.timestamp).toLocaleTimeString()}这些
-                            <td>${u.latitud.toFixed(5)}这些
-                            <td>${u.longitud.toFixed(5)}这些
-                            <td>${u.velocidad_kmh || 0} km/h这些
+                            <td>${new Date(u.timestamp).toLocaleTimeString()}</td>
+                            <td>${u.latitud.toFixed(5)}</td>
+                            <td>${u.longitud.toFixed(5)}</td>
+                            <td>${u.velocidad_kmh || 0} km/h</td>
                         </tr>
                     `).join('');
                 } else {
