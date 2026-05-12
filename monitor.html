@@ -251,7 +251,6 @@
                     if (evento && evento.length > 0) {
                         const e = evento[0];
                         
-                        // Cálculo del tiempo activo
                         const ahora = new Date();
                         const activacion = new Date(e.fecha_activacion);
                         const diferenciaMs = ahora - activacion;
@@ -344,62 +343,102 @@
             }
             
             async function cargarPolicias() {
-                const { data: policias, error } = await supabase
-                    .from('agentes_ubicacion')
-                    .select('*, usuarios!inner(nombre_completo)')
-                    .eq('disponible', true);
-                
-                if (error) {
-                    console.error('Error cargando policías:', error);
-                    return;
-                }
-                
-                policiasMarkers.forEach(m => map.removeLayer(m));
-                policiasMarkers = [];
-                
-                if (policias && policias.length > 0) {
-                    document.getElementById('totalPolicias').innerHTML = policias.length;
-                    document.getElementById('policiasInfo').innerHTML = policias.map(p => `
-                        <div class="fila">
-                            <span>👮 ${p.usuarios?.nombre_completo || 'Policía'}</span>
-                            <span>📍 ${p.latitud.toFixed(5)}, ${p.longitud.toFixed(5)}</span>
-                        </div>
-                    `).join('');
+                try {
+                    // Primero obtener ubicaciones de policías
+                    const { data: policias, error } = await supabase
+                        .from('agentes_ubicacion')
+                        .select('id_usuario, latitud, longitud, disponible')
+                        .eq('disponible', true);
                     
-                    policias.forEach(p => {
-                        const marker = L.circleMarker([p.latitud, p.longitud], getPoliciaStyle())
-                            .addTo(map)
-                            .bindPopup(`👮 ${p.usuarios?.nombre_completo || 'Policía'}`);
-                        policiasMarkers.push(marker);
-                    });
-                } else {
-                    document.getElementById('policiasInfo').innerHTML = '<div class="no-data">No hay policías disponibles</div>';
-                    document.getElementById('totalPolicias').innerHTML = '0';
+                    if (error) {
+                        console.error('Error cargando policías:', error);
+                        return;
+                    }
+                    
+                    console.log('Policías encontrados en agentes_ubicacion:', policias?.length || 0);
+                    
+                    policiasMarkers.forEach(m => map.removeLayer(m));
+                    policiasMarkers = [];
+                    
+                    if (policias && policias.length > 0) {
+                        // Obtener nombres de los policías
+                        const idsPolicias = policias.map(p => p.id_usuario);
+                        const { data: usuariosPolicias } = await supabase
+                            .from('usuarios')
+                            .select('id_usuario, nombre_completo')
+                            .in('id_usuario', idsPolicias);
+                        
+                        const nombresMap = {};
+                        if (usuariosPolicias) {
+                            usuariosPolicias.forEach(u => {
+                                nombresMap[u.id_usuario] = u.nombre_completo;
+                            });
+                        }
+                        
+                        document.getElementById('totalPolicias').innerHTML = policias.length;
+                        document.getElementById('policiasInfo').innerHTML = policias.map(p => `
+                            <div class="fila">
+                                <span>👮 ${nombresMap[p.id_usuario] || 'Policía'}</span>
+                                <span>📍 ${p.latitud.toFixed(5)}, ${p.longitud.toFixed(5)}</span>
+                            </div>
+                        `).join('');
+                        
+                        policias.forEach(p => {
+                            const marker = L.circleMarker([p.latitud, p.longitud], getPoliciaStyle())
+                                .addTo(map)
+                                .bindPopup(`👮 ${nombresMap[p.id_usuario] || 'Policía'}`);
+                            policiasMarkers.push(marker);
+                        });
+                    } else {
+                        document.getElementById('policiasInfo').innerHTML = '<div class="no-data">No hay policías disponibles</div>';
+                        document.getElementById('totalPolicias').innerHTML = '0';
+                    }
+                } catch (err) {
+                    console.error('Error en cargarPolicias:', err);
                 }
             }
             
             async function cargarNotificaciones(eventoId) {
-                const { data: notificaciones, error } = await supabase
-                    .from('notificaciones_emergencia_agentes')
-                    .select('*, usuarios!inner(nombre_completo)')
-                    .eq('id_evento', eventoId);
-                
-                if (error) {
-                    console.error('Error cargando notificaciones:', error);
-                    return;
-                }
-                
-                if (notificaciones && notificaciones.length > 0) {
-                    document.getElementById('totalNotificaciones').innerHTML = notificaciones.length;
-                    document.getElementById('notificacionesInfo').innerHTML = notificaciones.map(n => `
-                        <div class="fila">
-                            <span>👮 ${n.usuarios?.nombre_completo || 'Agente'}</span>
-                            <span><span class="badge badge-${n.respuesta}">${n.respuesta}</span></span>
-                        </div>
-                    `).join('');
-                } else {
-                    document.getElementById('notificacionesInfo').innerHTML = '<div class="no-data">Sin notificaciones</div>';
-                    document.getElementById('totalNotificaciones').innerHTML = '0';
+                try {
+                    const { data: notificaciones, error } = await supabase
+                        .from('notificaciones_emergencia_agentes')
+                        .select('id_agente, distancia_metros, respuesta')
+                        .eq('id_evento', eventoId);
+                    
+                    if (error) {
+                        console.error('Error cargando notificaciones:', error);
+                        return;
+                    }
+                    
+                    console.log('Notificaciones encontradas:', notificaciones?.length || 0);
+                    
+                    if (notificaciones && notificaciones.length > 0) {
+                        const idsAgentes = notificaciones.map(n => n.id_agente);
+                        const { data: agentes } = await supabase
+                            .from('usuarios')
+                            .select('id_usuario, nombre_completo')
+                            .in('id_usuario', idsAgentes);
+                        
+                        const nombresMap = {};
+                        if (agentes) {
+                            agentes.forEach(a => {
+                                nombresMap[a.id_usuario] = a.nombre_completo;
+                            });
+                        }
+                        
+                        document.getElementById('totalNotificaciones').innerHTML = notificaciones.length;
+                        document.getElementById('notificacionesInfo').innerHTML = notificaciones.map(n => `
+                            <div class="fila">
+                                <span>👮 ${nombresMap[n.id_agente] || 'Agente'}</span>
+                                <span><span class="badge badge-${n.respuesta}">${n.respuesta}</span></span>
+                            </div>
+                        `).join('');
+                    } else {
+                        document.getElementById('notificacionesInfo').innerHTML = '<div class="no-data">Sin notificaciones</div>';
+                        document.getElementById('totalNotificaciones').innerHTML = '0';
+                    }
+                } catch (err) {
+                    console.error('Error en cargarNotificaciones:', err);
                 }
             }
             
