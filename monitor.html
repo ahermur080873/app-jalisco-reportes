@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoreo de Emergencias</title>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body,html { margin:0; padding:0; height:100%; font-family:system-ui,'Segoe UI',sans-serif; background:#0f0f1a; color:#fff; }
+        .header { background:#0f0f1a; padding:12px 20px; border-bottom:2px solid #dc3545; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+        .header h1 { margin:0; font-size:1.5rem; }
+        .status { background:#dc3545; padding:5px 15px; border-radius:30px; font-size:0.8rem; font-weight:bold; }
+        .dashboard { display:flex; height:calc(100% - 65px); }
+        .mapa { flex:2; }
+        #map { height:100%; width:100%; }
+        .panel { flex:1; background:#16213e; padding:15px; overflow-y:auto; border-left:2px solid #dc3545; }
+        .card { background:#0f0f1a; border-radius:12px; padding:12px; margin-bottom:15px; }
+        .card h3 { margin:0 0 10px 0; font-size:1rem; color:#dc3545; }
+        .fila { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #2a2a3e; font-size:0.8rem; flex-wrap:wrap; gap:8px; }
+        .btn { background:#dc3545; border:none; color:#fff; padding:10px; border-radius:8px; width:100%; margin-top:10px; cursor:pointer; font-weight:bold; }
+        .badge-aceptado { background:#28a745; padding:2px 8px; border-radius:20px; font-size:0.7rem; }
+        .badge-camino { background:#17a2b8; padding:2px 8px; border-radius:20px; font-size:0.7rem; }
+        .badge-pendiente { background:#ffc107; color:#000; padding:2px 8px; border-radius:20px; font-size:0.7rem; }
+        .sin-datos { text-align:center; padding:20px; color:#888; font-size:0.8rem; }
+        @media (max-width:700px){ .dashboard{flex-direction:column;} .panel{max-height:400px;} }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚨 Monitoreo de Emergencias</h1>
+        <div class="status" id="status">🔴 SISTEMA ACTIVO</div>
+    </div>
+    <div class="dashboard">
+        <div class="mapa"><div id="map"></div></div>
+        <div class="panel">
+            <div class="card"><h3>📍 EMERGENCIA ACTIVA</h3><div id="emergencia" class="sin-datos">Cargando...</div></div>
+            <div class="card"><h3>🕒 ÚLTIMAS UBICACIONES</h3><div id="ubicaciones" class="sin-datos">Cargando...</div></div>
+            <div class="card"><h3>👮 POLICÍAS CERCANOS</h3><div id="policias" class="sin-datos">Cargando...</div></div>
+            <div class="card"><h3>🔔 NOTIFICACIONES</h3><div id="notificaciones" class="sin-datos">Cargando...</div></div>
+            <button class="btn" id="btnRefresh">🔄 ACTUALIZAR</button>
+        </div>
+    </div>
+    <script>
+        (function(){
+            const URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
+            const KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
+            const supabase = window.supabase.createClient(URL, KEY);
+            let map, eventoMarker, rutaLinea, policiasMarkers = [];
+            
+            function initMap(){
+                map = L.map('map').setView([20.6761,-103.3476],13);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'OSM'}).addTo(map);
+            }
+            
+            async function cargarTodo(){
+                try{
+                    const {data:evento}=await supabase.from('eventos_emergencia').select('*').eq('estado','activo').order('fecha_activacion',{ascending:false}).limit(1);
+                    if(evento&&evento.length){
+                        const e=evento[0];
+                        document.getElementById('status').innerHTML='🔴 EMERGENCIA ACTIVA';
+                        const {data:ciu}=await supabase.from('usuarios').select('nombre_completo').eq('id_usuario',e.id_usuario).single();
+                        const mins=Math.floor((new Date()-new Date(e.fecha_activacion))/60000);
+                        document.getElementById('emergencia').innerHTML=`
+                            <div class="fila"><strong>ID:</strong> #${e.id_evento}</div>
+                            <div class="fila"><strong>Ciudadano:</strong> ${ciu?.nombre_completo||'Desconocido'}</div>
+                            <div class="fila"><strong>Activo:</strong> ${mins} min</div>
+                            <div class="fila"><strong>Inicio:</strong> ${e.latitud.toFixed(4)}, ${e.longitud.toFixed(4)}</div>
+                        `;
+                        if(eventoMarker)map.removeLayer(eventoMarker);
+                        eventoMarker=L.marker([e.latitud,e.longitud],{icon:L.divIcon({html:'<div style="background:#dc3545;width:35px;height:35px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:20px;">🚨</div>',iconSize:[35,35]})}).addTo(map);
+                        map.setView([e.latitud,e.longitud],14);
+                        
+                        const {data:ubis}=await supabase.from('emergencia_ubicaciones').select('*').eq('id_evento',e.id_evento).order('timestamp');
+                        if(ubis&&ubis.length){
+                            if(rutaLinea)map.removeLayer(rutaLinea);
+                            rutaLinea=L.polyline(ubis.map(u=>[u.latitud,u.longitud]),{color:'#ffc107',weight:3}).addTo(map);
+                            document.getElementById('ubicaciones').innerHTML=ubis.slice(-5).reverse().map(u=>`<div class="fila"><span>🕒 ${new Date(u.timestamp).toLocaleTimeString()}</span><span>${u.latitud.toFixed(4)},${u.longitud.toFixed(4)}</span></div>`).join('');
+                        }else document.getElementById('ubicaciones').innerHTML='<div class="sin-datos">📡 Esperando...</div>';
+                        
+                        const {data:notis}=await supabase.from('notificaciones_emergencia_agentes').select('*,usuarios!inner(nombre_completo)').eq('id_evento',e.id_evento);
+                        if(notis&&notis.length){
+                            function badge(r){return r==='aceptada'?'badge-aceptado':(r==='en camino'?'badge-camino':'badge-pendiente');}
+                            document.getElementById('notificaciones').innerHTML=notis.map(n=>`<div class="fila"><span>👮 ${n.usuarios?.nombre_completo||'Agente'}</span><span class="${badge(n.respuesta)}">${n.respuesta}</span></div>`).join('');
+                        }else document.getElementById('notificaciones').innerHTML='<div class="sin-datos">Sin notificaciones</div>';
+                    }else{
+                        document.getElementById('status').innerHTML='🟢 SISTEMA ACTIVO';
+                        document.getElementById('emergencia').innerHTML='<div class="sin-datos">✅ No hay emergencias activas</div>';
+                        document.getElementById('ubicaciones').innerHTML='<div class="sin-datos">Sin emergencia activa</div>';
+                        document.getElementById('notificaciones').innerHTML='<div class="sin-datos">Sin emergencia activa</div>';
+                        if(eventoMarker)map.removeLayer(eventoMarker);
+                        if(rutaLinea)map.removeLayer(rutaLinea);
+                    }
+                    
+                    const {data:policias}=await supabase.from('agentes_ubicacion').select('*,usuarios!inner(nombre_completo)').eq('disponible',true);
+                    if(policiasMarkers.length){policiasMarkers.forEach(m=>map.removeLayer(m));policiasMarkers=[];}
+                    if(policias&&policias.length){
+                        document.getElementById('policias').innerHTML=policias.map(p=>`<div class="fila"><span>👮 ${p.usuarios?.nombre_completo||'Policía'}</span><span>${p.latitud.toFixed(4)},${p.longitud.toFixed(4)}</span></div>`).join('');
+                        policias.forEach(p=>policiasMarkers.push(L.marker([p.latitud,p.longitud],{icon:L.divIcon({html:'<div style="background:#00b4d8;width:28px;height:28px;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;">👮</div>',iconSize:[28,28]})}).addTo(map)));
+                    }else document.getElementById('policias').innerHTML='<div class="sin-datos">No hay policías disponibles</div>';
+                }catch(e){console.error(e);}
+            }
+            initMap();
+            cargarTodo();
+            setInterval(cargarTodo,8000);
+            document.getElementById('btnRefresh').onclick=()=>cargarTodo();
+        })();
+    </script>
+</body>
+</html>
