@@ -106,7 +106,6 @@
                             if (rutaLinea) map.removeLayer(rutaLinea);
                             rutaLinea = L.polyline(ubis.map(u => [u.latitud, u.longitud]), { color: '#ffc107', weight: 3 }).addTo(map);
                             
-                            // Limpiar marcadores anteriores
                             ubicacionesMarkers.forEach(m => map.removeLayer(m));
                             ubicacionesMarkers = [];
                             
