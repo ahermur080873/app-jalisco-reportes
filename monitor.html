@@ -26,9 +26,6 @@
         .badge-pendiente { background: #ffc107; color: #000; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; }
         .sin-datos { text-align: center; padding: 20px; color: #888; font-size: 0.8rem; }
         @media (max-width: 700px) { .dashboard { flex-direction: column; } .panel { max-height: 400px; } }
-        
-        /* Marcadores personalizados sin usar divIcon (usa imágenes de emoji directamente) */
-        .leaflet-marker-icon span { font-size: 28px; }
     </style>
 </head>
 <body>
@@ -51,22 +48,26 @@
             const URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
             const KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
             const supabase = window.supabase.createClient(URL, KEY);
-            let map, eventoMarker, rutaLinea, policiasMarkers = [];
+            let map, eventoMarker, rutaLinea, policiasMarkers = [], ubicacionesMarkers = [];
             
             function initMap() {
                 map = L.map('map').setView([20.6761, -103.3476], 13);
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' 
                 }).addTo(map);
+                console.log('Mapa iniciado');
             }
             
-            function getEventoIcon() {
-                // Usamos L.marker estándar en lugar de L.divIcon para evitar eval()
-                return L.marker([0, 0], { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-red.png', iconSize: [25, 41], iconAnchor: [12, 41] }) });
+            function getEventoStyle() {
+                return { radius: 18, fillColor: '#dc3545', color: '#fff', weight: 3, opacity: 1, fillOpacity: 0.9 };
             }
             
-            function getPoliciaIcon() {
-                return L.marker([0, 0], { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-blue.png', iconSize: [25, 41], iconAnchor: [12, 41] }) });
+            function getPoliciaStyle() {
+                return { radius: 12, fillColor: '#00b4d8', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8 };
+            }
+            
+            function getUbicacionStyle() {
+                return { radius: 6, fillColor: '#ffc107', color: '#fff', weight: 1, opacity: 1, fillOpacity: 0.9 };
             }
             
             async function cargarTodo() {
@@ -94,9 +95,9 @@
                         `;
                         
                         if (eventoMarker) map.removeLayer(eventoMarker);
-                        eventoMarker = L.marker([e.latitud, e.longitud], {
-                            icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-red.png', iconSize: [25, 41], iconAnchor: [12, 41] })
-                        }).addTo(map).bindPopup('🚨 EMERGENCIA ACTIVA');
+                        eventoMarker = L.circleMarker([e.latitud, e.longitud], getEventoStyle())
+                            .addTo(map)
+                            .bindPopup('🚨 EMERGENCIA ACTIVA');
                         map.setView([e.latitud, e.longitud], 14);
                         
                         // 2. Trayectoria
@@ -104,6 +105,18 @@
                         if (ubis && ubis.length > 0) {
                             if (rutaLinea) map.removeLayer(rutaLinea);
                             rutaLinea = L.polyline(ubis.map(u => [u.latitud, u.longitud]), { color: '#ffc107', weight: 3 }).addTo(map);
+                            
+                            // Limpiar marcadores anteriores
+                            ubicacionesMarkers.forEach(m => map.removeLayer(m));
+                            ubicacionesMarkers = [];
+                            
+                            ubis.forEach(u => {
+                                const marker = L.circleMarker([u.latitud, u.longitud], getUbicacionStyle())
+                                    .addTo(map)
+                                    .bindPopup(`🕒 ${new Date(u.timestamp).toLocaleTimeString()}<br>📍 ${u.latitud.toFixed(5)}, ${u.longitud.toFixed(5)}`);
+                                ubicacionesMarkers.push(marker);
+                            });
+                            
                             const ultimas = ubis.slice(-5).reverse();
                             document.getElementById('ubicaciones').innerHTML = ultimas.map(u => `
                                 <div class="fila">
@@ -135,6 +148,8 @@
                         document.getElementById('notificaciones').innerHTML = '<div class="sin-datos">Sin emergencia activa</div>';
                         if (eventoMarker) map.removeLayer(eventoMarker);
                         if (rutaLinea) map.removeLayer(rutaLinea);
+                        ubicacionesMarkers.forEach(m => map.removeLayer(m));
+                        ubicacionesMarkers = [];
                     }
                     
                     // 4. Policías
@@ -152,9 +167,9 @@
                             </div>
                         `).join('');
                         policias.forEach(p => {
-                            const marker = L.marker([p.latitud, p.longitud], {
-                                icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-blue.png', iconSize: [25, 41], iconAnchor: [12, 41] })
-                            }).addTo(map).bindPopup(`👮 ${p.usuarios?.nombre_completo || 'Policía'}`);
+                            const marker = L.circleMarker([p.latitud, p.longitud], getPoliciaStyle())
+                                .addTo(map)
+                                .bindPopup(`👮 ${p.usuarios?.nombre_completo || 'Policía'}`);
                             policiasMarkers.push(marker);
                         });
                     } else {
