@@ -4,57 +4,224 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitoreo de Emergencias - Botón de Pánico</title>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Chart.js (opcional, para futuros gráficos) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { height: 100%; font-family: 'Segoe UI', Arial, sans-serif; background: #0f0f1a; color: #fff; }
-        .header { background: #0f0f1a; padding: 12px 20px; border-bottom: 2px solid #dc3545; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        .header h1 { font-size: 1.5rem; }
-        .status { background: #dc3545; padding: 5px 15px; border-radius: 30px; font-size: 0.8rem; font-weight: bold; }
-        .dashboard { display: flex; height: calc(100% - 65px); }
-        .mapa { flex: 2; }
-        #map { height: 100%; width: 100%; }
-        .panel { flex: 1; background: #16213e; padding: 15px; overflow-y: auto; border-left: 2px solid #dc3545; }
-        .card { background: #0f0f1a; border-radius: 12px; padding: 12px; margin-bottom: 15px; }
-        .card h3 { margin-bottom: 10px; font-size: 0.9rem; color: #dc3545; }
-        .fila { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #2a2a3e; font-size: 0.8rem; flex-wrap: wrap; gap: 5px; }
-        .btn { background: #dc3545; border: none; color: white; padding: 10px; border-radius: 8px; width: 100%; margin-top: 10px; cursor: pointer; font-weight: bold; }
-        .badge-aceptado { background: #28a745; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; }
-        .badge-camino { background: #17a2b8; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; }
-        .badge-pendiente { background: #ffc107; color: #000; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; }
-        .sin-datos { text-align: center; padding: 20px; color: #888; font-size: 0.8rem; }
-        @media (max-width: 700px) { .dashboard { flex-direction: column; } .panel { max-height: 400px; } }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; color: #333; }
+        
+        .header {
+            background: linear-gradient(135deg, #0b3d2e, #1b5e3f);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .btn-volver { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 18px; border-radius: 25px; cursor: pointer; text-decoration: none; font-size: 14px; }
+        .btn-volver:hover { background: rgba(255,255,255,0.3); }
+        .last-update { background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 20px; font-size: 12px; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px 30px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .stat-card .value { font-size: 32px; font-weight: bold; color: #1b5e3f; }
+        .stat-card .label { color: #666; font-size: 14px; margin-top: 5px; }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 0 30px 20px 30px;
+        }
+        
+        .map-container {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .map-container h3 { padding: 15px 20px; background: #1b5e3f; color: white; margin: 0; font-size: 18px; }
+        #map { height: 450px; width: 100%; }
+        
+        .info-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow-y: auto;
+            max-height: 450px;
+        }
+        .info-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+        }
+        .info-card h3 {
+            margin-bottom: 12px;
+            font-size: 16px;
+            color: #1b5e3f;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-left: 4px solid #dc3545;
+            padding-left: 12px;
+        }
+        .fila { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+        .fila strong { color: #495057; }
+        
+        .reports-table {
+            background: white;
+            border-radius: 16px;
+            margin: 0 30px 20px;
+            overflow-x: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .reports-table h3 { padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; margin: 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        th { background: #f8f9fa; font-weight: 600; }
+        
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-aceptado { background: #d4edda; color: #155724; }
+        .badge-camino { background: #cce5ff; color: #004085; }
+        .badge-pendiente { background: #fff3cd; color: #856404; }
+        
+        .footer { text-align: center; padding: 20px; color: #6c757d; font-size: 12px; }
+        
+        .floating-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #1b5e3f;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            z-index: 1000;
+        }
+        .floating-btn:hover { background: #0b3d2e; transform: scale(1.05); }
+        
+        @media (max-width: 900px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .info-panel { max-height: none; }
+        }
+        
+        .no-data { text-align: center; padding: 20px; color: #999; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🚨 Monitoreo de Emergencias - Botón de Pánico</h1>
-        <div class="status" id="status">🔴 SISTEMA ACTIVO</div>
-    </div>
-    <div class="dashboard">
-        <div class="mapa"><div id="map"></div></div>
-        <div class="panel">
-            <div class="card"><h3>📍 EMERGENCIA ACTIVA</h3><div id="emergencia" class="sin-datos">Cargando...</div></div>
-            <div class="card"><h3>🕒 ÚLTIMAS UBICACIONES</h3><div id="ubicaciones" class="sin-datos">Cargando...</div></div>
-            <div class="card"><h3>👮 POLICÍAS CERCANOS</h3><div id="policias" class="sin-datos">Cargando...</div></div>
-            <div class="card"><h3>🔔 NOTIFICACIONES</h3><div id="notificaciones" class="sin-datos">Cargando...</div></div>
-            <button class="btn" id="btnRefresh">🔄 ACTUALIZAR</button>
+        <div>
+            <h1><i class="fas fa-shield-alt"></i> Monitoreo de Emergencias - Botón de Pánico</h1>
+            <p>Seguimiento en tiempo real de emergencias activas</p>
+        </div>
+        <div class="user-info">
+            <span id="userName"><i class="fas fa-user-circle"></i> Cargando...</span>
+            <a href="dashboard_completo.html" class="btn-volver"><i class="fas fa-map-marked-alt"></i> Ver Mapa</a>
+            <div class="last-update" id="lastUpdate"><i class="fas fa-sync-alt"></i> Actualizando...</div>
         </div>
     </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card"><div class="value" id="tiempoActivo">--</div><div class="label">Tiempo activo</div></div>
+        <div class="stat-card"><div class="value" id="totalPolicias">--</div><div class="label">Policías cercanos</div></div>
+        <div class="stat-card"><div class="value" id="totalNotificaciones">--</div><div class="label">Notificaciones</div></div>
+        <div class="stat-card"><div class="value" id="totalUbicaciones">--</div><div class="label">Ubicaciones</div></div>
+    </div>
+    
+    <div class="dashboard">
+        <div class="map-container">
+            <h3><i class="fas fa-map-marker-alt"></i> Mapa de Seguimiento</h3>
+            <div id="map"></div>
+        </div>
+        
+        <div class="info-panel">
+            <div class="info-card">
+                <h3><i class="fas fa-exclamation-triangle"></i> Emergencia Activa</h3>
+                <div id="emergenciaInfo" class="no-data">Cargando...</div>
+            </div>
+            
+            <div class="info-card">
+                <h3><i class="fas fa-map-marker-alt"></i> Últimas Ubicaciones</h3>
+                <div id="ubicacionesInfo" class="no-data">Cargando...</div>
+            </div>
+            
+            <div class="info-card">
+                <h3><i class="fas fa-user-shield"></i> Policías Cercanos</h3>
+                <div id="policiasInfo" class="no-data">Cargando...</div>
+            </div>
+            
+            <div class="info-card">
+                <h3><i class="fas fa-bell"></i> Notificaciones</h3>
+                <div id="notificacionesInfo" class="no-data">Cargando...</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="reports-table">
+        <h3><i class="fas fa-history"></i> Historial de Ubicaciones</h3>
+        <div style="overflow-x: auto;">
+            <table id="tablaUbicaciones">
+                <thead>
+                    <tr><th>Hora</th><th>Latitud</th><th>Longitud</th><th>Velocidad</th></tr>
+                </thead>
+                <tbody id="tablaBody">
+                    <tr><td colspan="4" class="no-data">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <a href="dashboard_completo.html" class="floating-btn"><i class="fas fa-home"></i></a>
+    
+    <div class="footer">
+        <i class="fas fa-database"></i> Datos en tiempo real desde Supabase | Seguridad Ciudadana Jalisco
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <script>
         (function() {
-            // ============================================
-            // CONFIGURACIÓN DE SUPABASE - SOLO UNA VEZ
-            // ============================================
             const SUPABASE_URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
             const SUPABASE_KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
             const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             
-            // ============================================
-            // VARIABLES GLOBALES DEL MAPA
-            // ============================================
             let map;
             let eventoMarker = null;
             let rutaLinea = null;
@@ -62,37 +229,29 @@
             let ubicacionesMarkers = [];
             let intervalo = null;
             
-            // ============================================
-            // INICIALIZAR MAPA
-            // ============================================
-            function initMap() {
-                map = L.map('map').setView([20.6761, -103.3476], 13);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' 
-                }).addTo(map);
-                console.log('✅ Mapa iniciado');
-            }
-            
-            // ============================================
-            // ESTILOS DE LOS MARCADORES
-            // ============================================
             function getEventoStyle() {
-                return { radius: 18, fillColor: '#dc3545', color: '#ffffff', weight: 3, opacity: 1, fillOpacity: 0.9 };
+                return { radius: 18, fillColor: '#dc3545', color: '#fff', weight: 3, opacity: 1, fillOpacity: 0.9 };
             }
             
             function getPoliciaStyle() {
-                return { radius: 12, fillColor: '#00b4d8', color: '#ffffff', weight: 2, opacity: 1, fillOpacity: 0.8 };
+                return { radius: 12, fillColor: '#17a2b8', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8 };
             }
             
             function getUbicacionStyle() {
-                return { radius: 7, fillColor: '#ffc107', color: '#ffffff', weight: 1, opacity: 1, fillOpacity: 0.9 };
+                return { radius: 6, fillColor: '#ffc107', color: '#fff', weight: 1.5, opacity: 1, fillOpacity: 0.9 };
             }
             
-            // ============================================
-            // CARGAR EMERGENCIA ACTIVA, TRAYECTORIA Y NOTIFICACIONES
-            // ============================================
-            async function cargarEmergencia() {
+            function initMap() {
+                map = L.map('map').setView([20.6761, -103.3476], 13);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO'
+                }).addTo(map);
+                console.log('Mapa iniciado');
+            }
+            
+            async function cargarDatos() {
                 try {
+                    // Obtener emergencia activa
                     const { data: evento, error } = await supabase
                         .from('eventos_emergencia')
                         .select('*')
@@ -107,9 +266,9 @@
                     
                     if (evento && evento.length > 0) {
                         const e = evento[0];
-                        document.getElementById('status').innerHTML = '🔴 EMERGENCIA ACTIVA';
+                        const minutos = Math.floor((new Date() - new Date(e.fecha_activacion)) / 60000);
                         
-                        // Obtener nombre del ciudadano
+                        // Obtener ciudadano
                         let nombreCiudadano = 'Ciudadano';
                         const { data: ciudadano } = await supabase
                             .from('usuarios')
@@ -118,196 +277,177 @@
                             .single();
                         if (ciudadano) nombreCiudadano = ciudadano.nombre_completo;
                         
-                        const minutosActivo = Math.floor((new Date() - new Date(e.fecha_activacion)) / 60000);
-                        
-                        document.getElementById('emergencia').innerHTML = `
-                            <div class="fila"><strong>ID:</strong> #${e.id_evento}</div>
-                            <div class="fila"><strong>Ciudadano:</strong> ${nombreCiudadano}</div>
-                            <div class="fila"><strong>Activo hace:</strong> ${minutosActivo} min</div>
-                            <div class="fila"><strong>Ubicación inicial:</strong> ${e.latitud.toFixed(5)}, ${e.longitud.toFixed(5)}</div>
+                        document.getElementById('tiempoActivo').innerHTML = `${minutos} <span style="font-size:14px;">min</span>`;
+                        document.getElementById('emergenciaInfo').innerHTML = `
+                            <div class="fila"><strong>ID:</strong> <span>#${e.id_evento}</span></div>
+                            <div class="fila"><strong>Ciudadano:</strong> <span>${nombreCiudadano}</span></div>
+                            <div class="fila"><strong>Activo desde:</strong> <span>${new Date(e.fecha_activacion).toLocaleTimeString()}</span></div>
+                            <div class="fila"><strong>Ubicación inicial:</strong> <span>${e.latitud.toFixed(5)}, ${e.longitud.toFixed(5)}</span></div>
                         `;
                         
-                        // Marcador de emergencia
                         if (eventoMarker) map.removeLayer(eventoMarker);
                         eventoMarker = L.circleMarker([e.latitud, e.longitud], getEventoStyle())
                             .addTo(map)
-                            .bindPopup(`🚨 EMERGENCIA ACTIVA<br>ID: ${e.id_evento}<br>Ciudadano: ${nombreCiudadano}`);
+                            .bindPopup(`<b>🚨 EMERGENCIA ACTIVA</b><br>ID: ${e.id_evento}<br>${nombreCiudadano}`);
                         map.setView([e.latitud, e.longitud], 14);
                         
                         // Cargar trayectoria
                         await cargarTrayectoria(e.id_evento);
-                        
-                        // Cargar notificaciones
                         await cargarNotificaciones(e.id_evento);
-                        
                     } else {
-                        document.getElementById('status').innerHTML = '🟢 SISTEMA ACTIVO';
-                        document.getElementById('emergencia').innerHTML = '<div class="sin-datos">✅ No hay emergencias activas</div>';
-                        document.getElementById('ubicaciones').innerHTML = '<div class="sin-datos">Sin emergencia activa</div>';
-                        document.getElementById('notificaciones').innerHTML = '<div class="sin-datos">Sin emergencia activa</div>';
-                        
+                        document.getElementById('emergenciaInfo').innerHTML = '<div class="no-data">✅ No hay emergencias activas</div>';
+                        document.getElementById('ubicacionesInfo').innerHTML = '<div class="no-data">Sin emergencia activa</div>';
+                        document.getElementById('notificacionesInfo').innerHTML = '<div class="no-data">Sin emergencia activa</div>';
+                        document.getElementById('tiempoActivo').innerHTML = '--';
                         if (eventoMarker) map.removeLayer(eventoMarker);
-                        eventoMarker = null;
                         if (rutaLinea) map.removeLayer(rutaLinea);
-                        rutaLinea = null;
                         ubicacionesMarkers.forEach(m => map.removeLayer(m));
                         ubicacionesMarkers = [];
                     }
+                    
+                    // Cargar policías
+                    await cargarPolicias();
+                    
                 } catch (err) {
-                    console.error('Error en cargarEmergencia:', err);
+                    console.error('Error en cargarDatos:', err);
                 }
             }
             
-            // ============================================
-            // CARGAR TRAYECTORIA DE LA EMERGENCIA
-            // ============================================
             async function cargarTrayectoria(eventoId) {
-                try {
-                    const { data: ubicaciones, error } = await supabase
-                        .from('emergencia_ubicaciones')
-                        .select('*')
-                        .eq('id_evento', eventoId)
-                        .order('timestamp', { ascending: true });
+                const { data: ubicaciones, error } = await supabase
+                    .from('emergencia_ubicaciones')
+                    .select('*')
+                    .eq('id_evento', eventoId)
+                    .order('timestamp', { ascending: true });
+                
+                if (error) {
+                    console.error('Error cargando trayectoria:', error);
+                    return;
+                }
+                
+                if (rutaLinea) map.removeLayer(rutaLinea);
+                ubicacionesMarkers.forEach(m => map.removeLayer(m));
+                ubicacionesMarkers = [];
+                
+                if (ubicaciones && ubicaciones.length > 0) {
+                    const puntos = ubicaciones.map(u => [u.latitud, u.longitud]);
+                    rutaLinea = L.polyline(puntos, { color: '#ffc107', weight: 3, opacity: 0.8 }).addTo(map);
                     
-                    if (error) {
-                        console.error('Error cargando trayectoria:', error);
-                        return;
-                    }
+                    ubicaciones.forEach(u => {
+                        const marker = L.circleMarker([u.latitud, u.longitud], getUbicacionStyle())
+                            .addTo(map)
+                            .bindPopup(`🕒 ${new Date(u.timestamp).toLocaleTimeString()}<br>📍 ${u.latitud.toFixed(5)}, ${u.longitud.toFixed(5)}`);
+                        ubicacionesMarkers.push(marker);
+                    });
                     
-                    // Limpiar elementos anteriores
-                    if (rutaLinea) map.removeLayer(rutaLinea);
-                    ubicacionesMarkers.forEach(m => map.removeLayer(m));
-                    ubicacionesMarkers = [];
+                    document.getElementById('totalUbicaciones').innerHTML = ubicaciones.length;
                     
-                    if (ubicaciones && ubicaciones.length > 0) {
-                        // Línea de trayectoria
-                        const puntos = ubicaciones.map(u => [u.latitud, u.longitud]);
-                        rutaLinea = L.polyline(puntos, { color: '#ffc107', weight: 3, opacity: 0.8 }).addTo(map);
-                        
-                        // Marcadores de ubicaciones
-                        ubicaciones.forEach(u => {
-                            const marker = L.circleMarker([u.latitud, u.longitud], getUbicacionStyle())
-                                .addTo(map)
-                                .bindPopup(`🕒 ${new Date(u.timestamp).toLocaleTimeString()}<br>📍 ${u.latitud.toFixed(5)}, ${u.longitud.toFixed(5)}`);
-                            ubicacionesMarkers.push(marker);
-                        });
-                        
-                        // Mostrar últimas 5 ubicaciones en el panel
-                        const ultimas = ubicaciones.slice(-5).reverse();
-                        document.getElementById('ubicaciones').innerHTML = ultimas.map(u => `
-                            <div class="fila">
-                                <span>🕒 ${new Date(u.timestamp).toLocaleTimeString()}</span>
-                                <span>📍 ${u.latitud.toFixed(5)}, ${u.longitud.toFixed(5)}</span>
-                            </div>
-                        `).join('');
-                    } else {
-                        document.getElementById('ubicaciones').innerHTML = '<div class="sin-datos">📡 Esperando ubicaciones...</div>';
-                    }
-                } catch (err) {
-                    console.error('Error en cargarTrayectoria:', err);
+                    const ultimas = ubicaciones.slice(-5).reverse();
+                    document.getElementById('ubicacionesInfo').innerHTML = ultimas.map(u => `
+                        <div class="fila">
+                            <span>🕒 ${new Date(u.timestamp).toLocaleTimeString()}</span>
+                            <span>📍 ${u.latitud.toFixed(5)}, ${u.longitud.toFixed(5)}</span>
+                        </div>
+                    `).join('');
+                    
+                    // Tabla
+                    const tbody = document.getElementById('tablaBody');
+                    tbody.innerHTML = ubicaciones.slice().reverse().map(u => `
+                        <tr>
+                            <td>${new Date(u.timestamp).toLocaleTimeString()}这些
+                            <td>${u.latitud.toFixed(5)}这些
+                            <td>${u.longitud.toFixed(5)}这些
+                            <td>${u.velocidad_kmh || 0} km/h这些
+                        </tr>
+                    `).join('');
+                } else {
+                    document.getElementById('ubicacionesInfo').innerHTML = '<div class="no-data">📡 Esperando ubicaciones...</div>';
+                    document.getElementById('totalUbicaciones').innerHTML = '0';
                 }
             }
             
-            // ============================================
-            // CARGAR NOTIFICACIONES DE LA EMERGENCIA
-            // ============================================
-            async function cargarNotificaciones(eventoId) {
-                try {
-                    const { data: notificaciones, error } = await supabase
-                        .from('notificaciones_emergencia_agentes')
-                        .select('*, usuarios!inner(nombre_completo)')
-                        .eq('id_evento', eventoId)
-                        .order('notificado_en', { ascending: false });
-                    
-                    if (error) {
-                        console.error('Error cargando notificaciones:', error);
-                        return;
-                    }
-                    
-                    const getBadgeClass = (respuesta) => {
-                        if (respuesta === 'aceptada') return 'badge-aceptado';
-                        if (respuesta === 'en camino') return 'badge-camino';
-                        return 'badge-pendiente';
-                    };
-                    
-                    if (notificaciones && notificaciones.length > 0) {
-                        document.getElementById('notificaciones').innerHTML = notificaciones.map(n => `
-                            <div class="fila">
-                                <span>👮 ${n.usuarios?.nombre_completo || 'Agente'}</span>
-                                <span class="${getBadgeClass(n.respuesta)}">${n.respuesta}</span>
-                            </div>
-                        `).join('');
-                    } else {
-                        document.getElementById('notificaciones').innerHTML = '<div class="sin-datos">Sin notificaciones</div>';
-                    }
-                } catch (err) {
-                    console.error('Error en cargarNotificaciones:', err);
-                }
-            }
-            
-            // ============================================
-            // CARGAR POLICÍAS CERCANOS
-            // ============================================
             async function cargarPolicias() {
-                try {
-                    const { data: policias, error } = await supabase
-                        .from('agentes_ubicacion')
-                        .select('*, usuarios!inner(nombre_completo)')
-                        .eq('disponible', true);
+                const { data: policias, error } = await supabase
+                    .from('agentes_ubicacion')
+                    .select('*, usuarios!inner(nombre_completo)')
+                    .eq('disponible', true);
+                
+                if (error) {
+                    console.error('Error cargando policías:', error);
+                    return;
+                }
+                
+                policiasMarkers.forEach(m => map.removeLayer(m));
+                policiasMarkers = [];
+                
+                if (policias && policias.length > 0) {
+                    document.getElementById('totalPolicias').innerHTML = policias.length;
+                    document.getElementById('policiasInfo').innerHTML = policias.map(p => `
+                        <div class="fila">
+                            <span>👮 ${p.usuarios?.nombre_completo || 'Policía'}</span>
+                            <span>📍 ${p.latitud.toFixed(5)}, ${p.longitud.toFixed(5)}</span>
+                        </div>
+                    `).join('');
                     
-                    if (error) {
-                        console.error('Error cargando policías:', error);
-                        return;
-                    }
-                    
-                    // Limpiar marcadores anteriores
-                    policiasMarkers.forEach(m => map.removeLayer(m));
-                    policiasMarkers = [];
-                    
-                    if (policias && policias.length > 0) {
-                        document.getElementById('policias').innerHTML = policias.map(p => `
-                            <div class="fila">
-                                <span>👮 ${p.usuarios?.nombre_completo || 'Policía'}</span>
-                                <span>📍 ${p.latitud.toFixed(5)}, ${p.longitud.toFixed(5)}</span>
-                            </div>
-                        `).join('');
-                        
-                        policias.forEach(p => {
-                            const marker = L.circleMarker([p.latitud, p.longitud], getPoliciaStyle())
-                                .addTo(map)
-                                .bindPopup(`👮 ${p.usuarios?.nombre_completo || 'Policía'}`);
-                            policiasMarkers.push(marker);
-                        });
-                    } else {
-                        document.getElementById('policias').innerHTML = '<div class="sin-datos">No hay policías disponibles</div>';
-                    }
-                } catch (err) {
-                    console.error('Error en cargarPolicias:', err);
+                    policias.forEach(p => {
+                        const marker = L.circleMarker([p.latitud, p.longitud], getPoliciaStyle())
+                            .addTo(map)
+                            .bindPopup(`👮 ${p.usuarios?.nombre_completo || 'Policía'}`);
+                        policiasMarkers.push(marker);
+                    });
+                } else {
+                    document.getElementById('policiasInfo').innerHTML = '<div class="no-data">No hay policías disponibles</div>';
+                    document.getElementById('totalPolicias').innerHTML = '0';
                 }
             }
             
-            // ============================================
-            // ACTUALIZAR TODO EL DASHBOARD
-            // ============================================
-            async function actualizarDashboard() {
-                console.log('🔄 Actualizando dashboard...');
-                await cargarEmergencia();
-                await cargarPolicias();
+            async function cargarNotificaciones(eventoId) {
+                const { data: notificaciones, error } = await supabase
+                    .from('notificaciones_emergencia_agentes')
+                    .select('*, usuarios!inner(nombre_completo)')
+                    .eq('id_evento', eventoId);
+                
+                if (error) {
+                    console.error('Error cargando notificaciones:', error);
+                    return;
+                }
+                
+                if (notificaciones && notificaciones.length > 0) {
+                    document.getElementById('totalNotificaciones').innerHTML = notificaciones.length;
+                    document.getElementById('notificacionesInfo').innerHTML = notificaciones.map(n => `
+                        <div class="fila">
+                            <span>👮 ${n.usuarios?.nombre_completo || 'Agente'}</span>
+                            <span><span class="badge badge-${n.respuesta}">${n.respuesta}</span></span>
+                        </div>
+                    `).join('');
+                } else {
+                    document.getElementById('notificacionesInfo').innerHTML = '<div class="no-data">Sin notificaciones</div>';
+                    document.getElementById('totalNotificaciones').innerHTML = '0';
+                }
             }
             
-            // ============================================
-            // INICIALIZACIÓN
-            // ============================================
-            function iniciar() {
+            async function actualizarTodo() {
+                console.log('🔄 Actualizando monitoreo...');
+                await cargarDatos();
+                document.getElementById('lastUpdate').innerHTML = `<i class="fas fa-sync-alt"></i> Actualizado: ${new Date().toLocaleTimeString()}`;
+            }
+            
+            async function init() {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                const email = session.user.email.split('@')[0];
+                document.getElementById('userName').innerHTML = `<i class="fas fa-user-circle"></i> ${email}`;
+                
                 initMap();
-                actualizarDashboard();
+                await actualizarTodo();
                 if (intervalo) clearInterval(intervalo);
-                intervalo = setInterval(actualizarDashboard, 8000);
-                document.getElementById('btnRefresh').addEventListener('click', actualizarDashboard);
+                intervalo = setInterval(actualizarTodo, 8000);
             }
             
-            // Arrancar todo
-            iniciar();
+            init();
         })();
     </script>
 </body>
