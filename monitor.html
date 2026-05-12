@@ -64,7 +64,7 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
         .map-container h3 { padding: 15px 20px; background: #1b5e3f; color: white; margin: 0; font-size: 18px; }
-        #map { height: 450px; width: 100%; }
+        #map { height: 500px; width: 100%; }
         
         .info-panel {
             background: white;
@@ -72,7 +72,7 @@
             padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             overflow-y: auto;
-            max-height: 450px;
+            max-height: 500px;
         }
         .info-card {
             background: white;
@@ -93,23 +93,6 @@
         }
         .fila { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; flex-wrap: wrap; gap: 8px; }
         .fila strong { color: #495057; }
-        
-        .reports-table {
-            background: white;
-            border-radius: 16px;
-            margin: 0 30px 20px;
-            overflow-x: auto;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-        .reports-table h3 { padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; margin: 0; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e9ecef; }
-        th { background: #f8f9fa; font-weight: 600; }
-        
-        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-        .badge-aceptado { background: #d4edda; color: #155724; }
-        .badge-camino { background: #cce5ff; color: #004085; }
-        .badge-pendiente { background: #fff3cd; color: #856404; }
         
         .footer { text-align: center; padding: 20px; color: #6c757d; font-size: 12px; }
         
@@ -140,6 +123,10 @@
         }
         
         .no-data { text-align: center; padding: 20px; color: #999; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-aceptado { background: #d4edda; color: #155724; }
+        .badge-camino { background: #cce5ff; color: #004085; }
+        .badge-pendiente { background: #fff3cd; color: #856404; }
     </style>
 </head>
 <body>
@@ -159,7 +146,7 @@
         <div class="stat-card"><div class="value" id="tiempoActivo">--</div><div class="label">Tiempo activo</div></div>
         <div class="stat-card"><div class="value" id="totalPolicias">--</div><div class="label">Policías cercanos</div></div>
         <div class="stat-card"><div class="value" id="totalNotificaciones">--</div><div class="label">Notificaciones</div></div>
-        <div class="stat-card"><div class="value" id="totalUbicaciones">--</div><div class="label">Ubicaciones registradas</div></div>
+        <div class="stat-card"><div class="value" id="totalUbicaciones">--</div><div class="label">Ubicaciones</div></div>
     </div>
     
     <div class="dashboard">
@@ -188,20 +175,6 @@
                 <h3><i class="fas fa-bell"></i> Notificaciones</h3>
                 <div id="notificacionesInfo" class="no-data">Cargando...</div>
             </div>
-        </div>
-    </div>
-    
-    <div class="reports-table">
-        <h3><i class="fas fa-history"></i> Historial de Ubicaciones</h3>
-        <div style="overflow-x: auto;">
-            <table>
-                <thead>
-                    <tr><th>Hora</th><th>Latitud</th><th>Longitud</th><th>Velocidad</th></tr>
-                </thead>
-                <tbody id="tablaBody">
-                    <tr><td colspan="4" class="no-data">Cargando...</td>
-                </tbody>
-             
         </div>
     </div>
     
@@ -278,16 +251,14 @@
                     if (evento && evento.length > 0) {
                         const e = evento[0];
                         
-                        // Cálculo del tiempo activo (positivo, formato legible)
+                        // Cálculo del tiempo activo
                         const ahora = new Date();
                         const activacion = new Date(e.fecha_activacion);
                         const diferenciaMs = ahora - activacion;
                         const tiempoTexto = formatearTiempo(diferenciaMs);
                         
-                        // Estadísticas
                         document.getElementById('tiempoActivo').innerHTML = tiempoTexto;
                         
-                        // Obtener ciudadano
                         let nombreCiudadano = 'Ciudadano';
                         const { data: ciudadano } = await supabase
                             .from('usuarios')
@@ -365,16 +336,6 @@
                             <span>📍 ${u.latitud.toFixed(5)}, ${u.longitud.toFixed(5)}</span>
                             <span>🚗 ${u.velocidad_kmh || 0} km/h</span>
                         </div>
-                    `).join('');
-                    
-                    const tbody = document.getElementById('tablaBody');
-                    tbody.innerHTML = ubicaciones.slice().reverse().map(u => `
-                        <tr>
-                            <td>${new Date(u.timestamp).toLocaleTimeString()}</td>
-                            <td>${u.latitud.toFixed(5)}</td>
-                            <td>${u.longitud.toFixed(5)}</td>
-                            <td>${u.velocidad_kmh || 0} km/h</td>
-                        </tr>
                     `).join('');
                 } else {
                     document.getElementById('ubicacionesInfo').innerHTML = '<div class="no-data">📡 Esperando ubicaciones...</div>';
