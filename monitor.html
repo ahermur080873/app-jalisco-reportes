@@ -1,1 +1,98 @@
-https://project-s0dh2-oyztz16oj-ahermur-s-projects.vercel.app/dashboard_completo.html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitoreo de Emergencias</title>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; }
+        .header { background: #1a1a2e; color: white; padding: 15px; text-align: center; }
+        .dashboard { display: flex; height: calc(100% - 70px); }
+        #map { flex: 2; height: 100%; }
+        .panel { flex: 1; background: #16213e; color: white; padding: 15px; overflow-y: auto; }
+        .card { background: #0f0f1a; padding: 12px; margin-bottom: 15px; border-radius: 8px; }
+        .card h3 { margin: 0 0 10px 0; color: #dc3545; }
+        .fila { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #333; }
+        .btn { background: #dc3545; color: white; border: none; padding: 10px; width: 100%; cursor: pointer; margin-top: 10px; }
+        .sin-datos { text-align: center; padding: 20px; color: #888; }
+        .badge-aceptado { background: #28a745; padding: 2px 8px; border-radius: 15px; }
+        .badge-camino { background: #17a2b8; padding: 2px 8px; border-radius: 15px; }
+        .badge-pendiente { background: #ffc107; color: black; padding: 2px 8px; border-radius: 15px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚨 Monitoreo de Emergencias</h1>
+        <div id="status" style="background:#dc3545; display:inline-block; padding:5px 15px; border-radius:30px;">🔴 SISTEMA ACTIVO</div>
+    </div>
+    <div class="dashboard">
+        <div id="map"></div>
+        <div class="panel">
+            <div class="card"><h3>📍 EMERGENCIA ACTIVA</h3><div id="emergencia" class="sin-datos">Cargando...</div></div>
+            <div class="card"><h3>🕒 ÚLTIMAS UBICACIONES</h3><div id="ubicaciones" class="sin-datos">Cargando...</div></div>
+            <div class="card"><h3>👮 POLICÍAS</h3><div id="policias" class="sin-datos">Cargando...</div></div>
+            <div class="card"><h3>🔔 NOTIFICACIONES</h3><div id="notificaciones" class="sin-datos">Cargando...</div></div>
+            <button class="btn" id="btnRefresh">🔄 ACTUALIZAR</button>
+        </div>
+    </div>
+    <script>
+        const URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
+        const KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
+        const supabase = window.supabase.createClient(URL, KEY);
+        let map, eventoMarker, rutaLinea, policiasMarkers = [];
+
+        function initMap() {
+            map = L.map('map').setView([20.6761, -103.3476], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        }
+
+        async function cargar() {
+            try {
+                const { data: evento } = await supabase.from('eventos_emergencia').select('*').eq('estado', 'activo').order('fecha_activacion', { ascending: false }).limit(1);
+                
+                if (evento && evento.length) {
+                    const e = evento[0];
+                    document.getElementById('emergencia').innerHTML = `
+                        <div class="fila"><strong>ID:</strong> #${e.id_evento}</div>
+                        <div class="fila"><strong>Ubicación:</strong> ${e.latitud.toFixed(5)}, ${e.longitud.toFixed(5)}</div>
+                    `;
+                    if (eventoMarker) map.removeLayer(eventoMarker);
+                    eventoMarker = L.circleMarker([e.latitud, e.longitud], { radius: 15, fillColor: '#dc3545', color: '#fff', weight: 3 }).addTo(map);
+                    map.setView([e.latitud, e.longitud], 14);
+                    
+                    const { data: ubis } = await supabase.from('emergencia_ubicaciones').select('*').eq('id_evento', e.id_evento).order('timestamp');
+                    if (ubis && ubis.length) {
+                        if (rutaLinea) map.removeLayer(rutaLinea);
+                        rutaLinea = L.polyline(ubis.map(u => [u.latitud, u.longitud]), { color: '#ffc107', weight: 3 }).addTo(map);
+                        document.getElementById('ubicaciones').innerHTML = ubis.slice(-5).reverse().map(u => `<div class="fila"><span>${new Date(u.timestamp).toLocaleTimeString()}</span><span>${u.latitud.toFixed(4)},${u.longitud.toFixed(4)}</span></div>`).join('');
+                    }
+                    
+                    const { data: notis } = await supabase.from('notificaciones_emergencia_agentes').select('*, usuarios!inner(nombre_completo)').eq('id_evento', e.id_evento);
+                    if (notis && notis.length) {
+                        document.getElementById('notificaciones').innerHTML = notis.map(n => `<div class="fila"><span>${n.usuarios?.nombre_completo}</span><span class="badge-${n.respuesta}">${n.respuesta}</span></div>`).join('');
+                    }
+                } else {
+                    document.getElementById('emergencia').innerHTML = '<div class="sin-datos">✅ No hay emergencias activas</div>';
+                    if (eventoMarker) map.removeLayer(eventoMarker);
+                    if (rutaLinea) map.removeLayer(rutaLinea);
+                }
+                
+                const { data: policias } = await supabase.from('agentes_ubicacion').select('*, usuarios!inner(nombre_completo)').eq('disponible', true);
+                if (policiasMarkers.length) policiasMarkers.forEach(m => map.removeLayer(m));
+                policiasMarkers = [];
+                if (policias && policias.length) {
+                    document.getElementById('policias').innerHTML = policias.map(p => `<div class="fila"><span>${p.usuarios?.nombre_completo}</span><span>${p.latitud.toFixed(4)},${p.longitud.toFixed(4)}</span></div>`).join('');
+                    policias.forEach(p => policiasMarkers.push(L.circleMarker([p.latitud, p.longitud], { radius: 10, fillColor: '#00b4d8', color: '#fff' }).addTo(map)));
+                }
+            } catch(e) { console.error(e); }
+        }
+        
+        initMap();
+        cargar();
+        setInterval(cargar, 8000);
+        document.getElementById('btnRefresh').onclick = cargar;
+    </script>
+</body>
+</html>
