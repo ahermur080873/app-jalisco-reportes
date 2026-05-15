@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Ruta 400 - Monitoreo en Tiempo Real</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; }
+        
+        .header {
+            background: linear-gradient(135deg, #0b3d2e, #1b5e3f);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
+        .user-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .btn-volver { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 18px; border-radius: 25px; cursor: pointer; text-decoration: none; font-size: 14px; }
+        .last-update { background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 20px; font-size: 12px; }
+        
+        .dashboard {
+            display: flex;
+            gap: 20px;
+            padding: 20px 30px;
+            min-height: 600px;
+        }
+        .map-container {
+            flex: 2;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .map-container h3 { padding: 15px 20px; background: #1b5e3f; color: white; margin: 0; }
+        #map { height: 550px; width: 100%; }
+        
+        .info-panel {
+            flex: 1;
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow-y: auto;
+        }
+        .info-card {
+            border-bottom: 1px solid #eee;
+            padding: 15px 0;
+        }
+        .info-card:last-child { border-bottom: none; }
+        .info-card h4 { color: #1b5e3f; margin-bottom: 10px; }
+        
+        .unidad-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-left: 4px solid #1b5e3f;
+        }
+        .unidad-nombre { font-weight: bold; font-size: 15px; }
+        .unidad-detalle { font-size: 12px; color: #666; margin-top: 5px; }
+        .unidad-eta { color: #1b5e3f; font-weight: bold; }
+        .parada-actual { background: #e8f4f0; border-left-color: #ffc107; }
+        
+        .footer { text-align: center; padding: 20px; color: #6c757d; font-size: 12px; }
+        
+        @media (max-width: 900px) {
+            .dashboard { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1><i class="fas fa-bus"></i> Ruta 400 - Centro de Guadalajara</h1>
+            <p>Monitoreo en tiempo real - Ubicación del autobús y tiempo de llegada</p>
+        </div>
+        <div class="user-info">
+            <span id="userName"><i class="fas fa-user-circle"></i> Cargando...</span>
+            <a href="dashboard_completo.html" class="btn-volver"><i class="fas fa-map-marked-alt"></i> Reportes</a>
+            <div class="last-update" id="lastUpdate"><i class="fas fa-sync-alt"></i> Actualizando...</div>
+        </div>
+    </div>
+    
+    <div class="dashboard">
+        <div class="map-container">
+            <h3><i class="fas fa-map-marker-alt"></i> 🚌 Recorrido Ruta 400</h3>
+            <div id="map"></div>
+        </div>
+        <div class="info-panel">
+            <div class="info-card">
+                <h4><i class="fas fa-bus"></i> Unidad en servicio</h4>
+                <div id="unidadInfo">Cargando información...</div>
+            </div>
+            <div class="info-card">
+                <h4><i class="fas fa-map-pin"></i> Próximas Paradas</h4>
+                <div id="proximasParadas">Cargando paradas...</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <i class="fas fa-chart-line"></i> Datos en tiempo real | Ruta 400 - Centro de Guadalajara
+    </div>
+    
+    <script>
+        const SUPABASE_URL = 'https://dujmncbgyamphqvuiroy.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_DGG5SJplcQytcpqBCA59cg_SJZBdM0A';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        let map;
+        let markerUnidad = null;
+        let markersParadas = [];
+        let viajeActivo = null;
+        let paradasLista = [];
+        let intervalo = null;
+        
+        function initMap() {
+            map = L.map('map').setView([20.6766, -103.3476], 14);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        }
+        
+        async function cargarParadas() {
+            const { data: paradas } = await supabase
+                .from('paradas')
+                .select('*, ruta_parada!inner(orden)')
+                .eq('ruta_parada.id_ruta', (await supabase.from('rutas_transporte').select('id_ruta').eq('nombre_ruta', 'Ruta 400 - Centro').single()).data.id_ruta)
+                .order('ruta_parada.orden');
+            
+            if (paradas) {
+                paradasLista = paradas;
+                markersParadas.forEach(m => map.removeLayer(m));
+                markersParadas = [];
+                
+                paradas.forEach((p, idx) => {
+                    const esPrimera = idx === 0;
+                    const esUltima = idx === paradas.length - 1;
+                    let iconHtml = '<i class="fas fa-map-marker-alt" style="color:#6c757d; font-size:22px;"></i>';
+                    if (esPrimera) iconHtml = '<i class="fas fa-flag-checkered" style="color:#28a745; font-size:22px;"></i>';
+                    if (esUltima) iconHtml = '<i class="fas fa-flag-checkered" style="color:#dc3545; font-size:22px;"></i>';
+                    
+                    const marker = L.marker([p.latitud, p.longitud], {
+                        icon: L.divIcon({ html: iconHtml, iconSize: [22, 22] })
+                    }).addTo(map).bindPopup(`
+                        <b>🚏 ${p.nombre}</b><br>
+                        📍 Orden: ${p.orden}<br>
+                        ${p.accesible ? '♿ Accesible' : ''}
+                    `);
+                    markersParadas.push(marker);
+                });
+                
+                const puntos = paradas.map(p => [p.latitud, p.longitud]);
+                L.polyline(puntos, { color: '#1b5e3f', weight: 4, opacity: 0.6 }).addTo(map);
+            }
+        }
+        
+        function calcularDistancia(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2 - lat1) * Math.PI/180;
+            const Δλ = (lon2 - lon1) * Math.PI/180;
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        function calcularTiemposLlegada(latUnidad, lonUnidad) {
+            if (!paradasLista.length) return;
+            
+            const llegadas = paradasLista.map(p => {
+                const distancia = calcularDistancia(latUnidad, lonUnidad, p.latitud, p.longitud);
+                const tiempoMin = Math.round(distancia / 500);
+                return { parada: p, distancia, tiempo: tiempoMin };
+            });
+            
+            llegadas.sort((a, b) => a.tiempo - b.tiempo);
+            const proximas = llegadas.filter(l => l.tiempo > 0).slice(0, 5);
+            
+            document.getElementById('proximasParadas').innerHTML = `
+                <div class="unidad-item parada-actual">
+                    <div class="unidad-nombre">📍 Ubicación actual del autobús</div>
+                    <div class="unidad-detalle">Lat: ${latUnidad.toFixed(6)}, Lon: ${lonUnidad.toFixed(6)}</div>
+                </div>
+                ${proximas.map(l => `
+                    <div class="unidad-item">
+                        <div class="unidad-nombre">🚏 ${l.parada.nombre}</div>
+                        <div class="unidad-detalle">🕒 Llega en: <span class="unidad-eta">${l.tiempo} minutos</span><br>📏 A ${Math.round(l.distancia)} metros</div>
+                    </div>
+                `).join('')}
+            `;
+        }
+        
+        async function cargarViajeActivo() {
+            const { data: viaje, error } = await supabase
+                .from('viajes_activos')
+                .select('*, unidades_transporte!inner(numero_economico), rutas_transporte!inner(nombre_ruta)')
+                .eq('estado', 'activo')
+                .eq('rutas_transporte.nombre_ruta', 'Ruta 400 - Centro')
+                .order('fecha_inicio', { ascending: false })
+                .limit(1);
+            
+            if (error) { console.error('Error:', error); return; }
+            
+            if (viaje && viaje.length > 0) {
+                viajeActivo = viaje[0];
+                
+                document.getElementById('unidadInfo').innerHTML = `
+                    <div class="unidad-item">
+                        <div class="unidad-nombre">🚌 Ruta 400 - Centro</div>
+                        <div class="unidad-detalle">Unidad: ${viajeActivo.unidades_transporte?.numero_economico || 'ECO-400'}<br>Conectado desde: ${new Date(viajeActivo.fecha_inicio).toLocaleTimeString()}</div>
+                    </div>
+                `;
+                
+                if (viajeActivo.ultima_latitud && viajeActivo.ultima_longitud) {
+                    if (markerUnidad) map.removeLayer(markerUnidad);
+                    markerUnidad = L.circleMarker([viajeActivo.ultima_latitud, viajeActivo.ultima_longitud], {
+                        radius: 14,
+                        fillColor: '#1b5e3f',
+                        color: '#fff',
+                        weight: 3,
+                        fillOpacity: 0.9
+                    }).addTo(map).bindPopup('<b>🚌 Autobús Ruta 400</b><br>En movimiento');
+                    map.setView([viajeActivo.ultima_latitud, viajeActivo.ultima_longitud], 14);
+                    
+                    calcularTiemposLlegada(viajeActivo.ultima_latitud, viajeActivo.ultima_longitud);
+                }
+            } else {
+                document.getElementById('unidadInfo').innerHTML = '<div class="unidad-item"><div class="unidad-nombre">🚌 Sin servicio activo</div><div class="unidad-detalle">No hay unidades de la Ruta 400 en servicio en este momento</div></div>';
+            }
+        }
+        
+        async function actualizarDashboard() {
+            await cargarViajeActivo();
+            document.getElementById('lastUpdate').innerHTML = `<i class="fas fa-sync-alt"></i> Actualizado: ${new Date().toLocaleTimeString()}`;
+        }
+        
+        async function init() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) { window.location.href = 'login.html'; return; }
+            document.getElementById('userName').innerHTML = `<i class="fas fa-user-circle"></i> ${session.user.email.split('@')[0]}`;
+            initMap();
+            await cargarParadas();
+            await actualizarDashboard();
+            intervalo = setInterval(actualizarDashboard, 5000);
+        }
+        init();
+    </script>
+</body>
+</html>
